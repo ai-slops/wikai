@@ -11,3 +11,4 @@ publisher.config.yaml
 private-vault/
 .publisher/
 test-results/
+core.*
