@@ -1,0 +1,24 @@
+{
+  "name": "wikai-public-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "build": "astro build && node scripts/copy-output.mjs",
+    "check": "astro check",
+    "dev": "astro dev --host 127.0.0.1",
+    "preview": "astro preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "astro": "7.3.3",
+    "zod": "4.6.5"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-linux-x64-musl": "1.2.9"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "typescript": "6.0.3"
+  }
+}
