@@ -1,0 +1,13 @@
+node_modules/
+.codegraph/
+.omo/
+.local/
+build/
+dist/
+coverage/
+.astro/
+*.log
+publisher.config.yaml
+private-vault/
+.publisher/
+test-results/
