@@ -1,0 +1,50 @@
+{
+  "name": "wikai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node app/server.mjs",
+    "dev": "node --watch app/server.mjs",
+    "wiki-pub": "node apps/cli/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "biome check packages apps tests scripts",
+    "build": "tsc --noEmit",
+    "demo": "node scripts/demo.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "commander": "15.0.0",
+    "diff": "9.0.0",
+    "file-type": "22.1.1",
+    "github-slugger": "2.0.0",
+    "hono": "4.13.8",
+    "mdast-util-to-string": "4.0.0",
+    "minimatch": "10.2.6",
+    "rehype-sanitize": "6.0.0",
+    "rehype-stringify": "10.0.1",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "remark-rehype": "11.1.2",
+    "remark-stringify": "11.0.0",
+    "sharp": "0.35.4",
+    "unified": "11.0.5",
+    "unist-util-visit": "5.1.0",
+    "yaml": "2.9.1",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@playwright/test": "1.63.0",
+    "@types/diff": "7.0.2",
+    "@types/hast": "3.0.5",
+    "@types/mdast": "4.0.4",
+    "@types/node": "26.6.2",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  }
+}
