@@ -1,0 +1,25 @@
+schemaVersion: 1
+vault:
+  root: ../private-vault
+publisher:
+  stateDir: ../private-vault/.publisher
+  previewStagingDir: ../build/preview-staging
+  releaseStagingDir: ../build/release-staging
+  cleanBuild: true
+publicViews:
+  roots: [public-views]
+assets:
+  roots: [assets, public-assets]
+  maxFileBytes: 52428800
+  rejectSymlinks: true
+  stripImageMetadata: true
+  reviewedHashes: []
+security:
+  denyPatterns: ["PRIVATE_SENTINEL_[A-Z0-9_]+"]
+site:
+  sourceDir: ./site
+  distDir: ../build/public-dist
+  url: https://example.invalid
+  isolatedBuild: true
+  network: disabled
+  image: wikai-site:local
