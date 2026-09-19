@@ -1,0 +1,27 @@
+---
+import BaseLayout from "../components/BaseLayout.astro";
+import EntryList from "../components/EntryList.astro";
+import { articlePresentation, loadContent } from "../lib/content.ts";
+
+const { pages } = await loadContent();
+const home = pages.find((page) => page.metadata.kind === "page" && page.metadata.page?.layout === "home");
+const featured = pages.filter((page) => page.metadata.featured && page.metadata.listed);
+const recent = pages.filter((page) => page.metadata.listed && page.metadata.kind !== "page").slice(0, 6);
+const description = home?.metadata.summary ?? "Selected work, durable knowledge, and field notes.";
+const homePresentation = home === undefined ? undefined : articlePresentation(home.metadata.title, home.html);
+---
+<BaseLayout title="Wikai — Work and knowledge" description={description} noindex={home !== undefined && !home.metadata.index}>
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Independent practice / public notebook</p>
+       <h1 id={homePresentation?.headingId}>{home?.metadata.title ?? "Ideas made useful."}</h1>
+    </div>
+    <div class="hero-note">
+      <p>{description}</p>
+      <a href="/about/">About this practice</a>
+    </div>
+  </section>
+  {homePresentation && <div class="prose" set:html={homePresentation.html} />}
+  {featured.length > 0 && <section><div class="section-heading"><h2>Selected</h2><span class="eyebrow">{featured.length} entries</span></div><EntryList pages={featured} empty="No featured entries." /></section>}
+  <section><div class="section-heading"><h2>Recently published</h2><a href="/search/">Search the archive</a></div><EntryList pages={recent} empty="The public notebook is being prepared." /></section>
+</BaseLayout>

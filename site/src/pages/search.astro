@@ -1,0 +1,48 @@
+---
+import BaseLayout from "../components/BaseLayout.astro";
+import PageHeader from "../components/PageHeader.astro";
+import { loadContent, publicPathFor, searchPages } from "../lib/content.ts";
+
+const { pages } = await loadContent();
+const searchable = searchPages(pages, true).map((page) => ({
+  title: page.metadata.title,
+  summary: page.metadata.summary ?? "",
+  tags: page.metadata.tags,
+  kind: page.metadata.kind,
+  path: publicPathFor(page),
+}));
+---
+<BaseLayout title="Search — Wikai" description="Search public work and knowledge, with logs available by choice." noindex>
+  <PageHeader eyebrow="Public index" title="Search" summary="Work and knowledge are included by default. Add dated logs when you need the full record." />
+  <section class="search-panel" aria-labelledby="search-label">
+    <div class="search-controls">
+      <label id="search-label">Search the public index<input id="query" type="search" autocomplete="off" placeholder="Title, summary, or tag" /></label>
+      <label class="check"><input id="include-log" type="checkbox" /> Include Log</label>
+    </div>
+    <p id="search-status" class="search-status" aria-live="polite"></p>
+    <ol id="search-results" class="entry-list"></ol>
+  </section>
+  <script define:vars={{ searchable }}>
+    const query = document.querySelector("#query");
+    const includeLog = document.querySelector("#include-log");
+    const results = document.querySelector("#search-results");
+    const status = document.querySelector("#search-status");
+    const render = () => {
+      if (!(query instanceof HTMLInputElement) || !(includeLog instanceof HTMLInputElement) || !(results instanceof HTMLOListElement) || !(status instanceof HTMLParagraphElement)) return;
+      const term = query.value.trim().toLocaleLowerCase();
+      const matches = searchable.filter((entry) => (entry.kind !== "log" || includeLog.checked) && (term === "" || `${entry.title} ${entry.summary} ${entry.tags.join(" ")}`.toLocaleLowerCase().includes(term)));
+      results.replaceChildren(...matches.map((entry) => {
+        const item = document.createElement("li"); item.className = "entry";
+        const meta = document.createElement("div"); meta.className = "entry-meta"; meta.textContent = entry.kind;
+        const body = document.createElement("div"); const heading = document.createElement("h3"); const link = document.createElement("a");
+        link.href = entry.path; link.textContent = entry.title; heading.append(link); body.append(heading);
+        if (entry.summary !== "") { const summary = document.createElement("p"); summary.textContent = entry.summary; body.append(summary); }
+        item.append(meta, body); return item;
+      }));
+      status.textContent = `${matches.length} ${matches.length === 1 ? "result" : "results"}`;
+    };
+    query?.addEventListener("input", render);
+    includeLog?.addEventListener("change", render);
+    render();
+  </script>
+</BaseLayout>

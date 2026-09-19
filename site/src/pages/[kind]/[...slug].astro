@@ -1,0 +1,14 @@
+---
+import Article from "../../components/Article.astro";
+import { loadContent } from "../../lib/content.ts";
+
+export const getStaticPaths = async () => {
+  const { pages } = await loadContent();
+  return pages.filter((page) => page.metadata.kind !== "page").map((page) => {
+    const [kind, ...slug] = page.metadata.slug.slice(1).split("/");
+    return { params: { kind, slug: slug.join("/") }, props: { page, pages } };
+  });
+};
+const { page, pages } = Astro.props;
+---
+<Article page={page} pages={pages} />
