@@ -1,0 +1,104 @@
+.app-shell {
+  block-size: 100dvh;
+  display: grid;
+  grid-template: auto minmax(0, 1fr) / 20rem minmax(30rem, 1fr) 18rem;
+  margin-inline: auto;
+  max-inline-size: 100rem;
+  overflow: hidden;
+}
+.masthead {
+  align-items: center;
+  background: var(--color-paper);
+  border-block-end: 1px solid var(--color-rule-strong);
+  display: flex;
+  gap: var(--space-4);
+  grid-column: 1 / -1;
+  min-block-size: 4.5rem;
+  padding: var(--space-3) var(--space-6);
+}
+.mark {
+  align-items: center;
+  background: var(--color-ink);
+  border: 0;
+  color: var(--color-paper);
+  display: inline-flex;
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  justify-content: center;
+  min-block-size: 2.5rem;
+  min-inline-size: 2.5rem;
+}
+.identity {
+  align-items: baseline;
+  display: flex;
+  gap: var(--space-2);
+}
+.identity strong {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+}
+.identity span {
+  color: var(--color-ink-muted);
+  font-size: var(--text-small);
+}
+.masthead-actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+}
+.connection {
+  align-items: center;
+  color: var(--color-ink-muted);
+  display: flex;
+  font: 600 var(--text-caption) / 1 var(--font-mono);
+  gap: var(--space-2);
+  margin-inline-end: var(--space-2);
+  text-transform: uppercase;
+}
+.connection i {
+  background: var(--color-success);
+  block-size: var(--space-2);
+  border-radius: 50%;
+  inline-size: var(--space-2);
+}
+.button {
+  align-items: center;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: var(--radius-control);
+  display: inline-flex;
+  font-size: var(--text-small);
+  font-weight: 650;
+  justify-content: center;
+  min-block-size: 2.75rem;
+  padding: var(--space-2) var(--space-4);
+  transition:
+    background-color var(--motion-micro) var(--ease),
+    color var(--motion-micro) var(--ease),
+    transform var(--motion-micro) var(--ease);
+}
+.button:active {
+  transform: translateY(1px);
+}
+.button--ink {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-paper);
+}
+.button--ink:hover {
+  background: var(--color-accent-strong);
+  border-color: var(--color-accent-strong);
+}
+.button--quiet {
+  border-color: var(--color-rule-strong);
+}
+.button--quiet:hover {
+  background: var(--color-paper-strong);
+  border-color: var(--color-ink);
+}
+.button--danger {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: var(--color-paper-strong);
+}
