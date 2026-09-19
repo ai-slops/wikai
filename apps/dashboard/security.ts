@@ -38,12 +38,17 @@ export function securityMiddleware(options: SecurityOptions): MiddlewareHandler 
 
     if (options.bearerToken !== undefined) {
       const authorization = context.req.header("authorization") ?? "";
-      const supplied = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
-      if (!equalSecret(supplied, options.bearerToken))
+      const basic = `Basic ${Buffer.from(`wikai:${options.bearerToken}`).toString("base64")}`;
+      const authenticated =
+        equalSecret(authorization, `Bearer ${options.bearerToken}`) ||
+        equalSecret(authorization, basic);
+      if (!authenticated) {
+        context.header("WWW-Authenticate", 'Basic realm="Wikai studio", charset="UTF-8"');
         return context.json(
           { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
           401,
         );
+      }
     }
 
     if (MUTATIONS.has(context.req.method)) {
