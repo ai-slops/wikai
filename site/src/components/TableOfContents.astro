@@ -1,0 +1,12 @@
+---
+import type { TocItem } from "../lib/content.ts";
+
+type Props = { readonly items: readonly TocItem[] };
+const { items } = Astro.props;
+---
+{items.length > 0 && (
+  <nav class="toc" aria-labelledby="toc-title">
+    <h2 id="toc-title">On this page</h2>
+    <ol>{items.map((item) => <li class={`toc-depth-${item.depth}`}><a href={`#${encodeURIComponent(item.id)}`}>{item.text}</a></li>)}</ol>
+  </nav>
+)}
