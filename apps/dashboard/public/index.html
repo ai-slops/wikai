@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Review and publish selected notes from a private vault.">
+    <meta name="color-scheme" content="light">
+    <title>Wikai / Publication studio</title>
+    <link rel="stylesheet" href="/tokens.css">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/queue.css">
+    <link rel="stylesheet" href="/review.css">
+    <link rel="stylesheet" href="/responsive.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#review">Skip to review</a>
+    <div class="app-shell">
+      <header class="masthead">
+        <button class="mark" id="queue-toggle" type="button" aria-label="Show publication queue" aria-expanded="false">W</button>
+        <div class="identity">
+          <strong>Wikai</strong><span aria-hidden="true">/</span><span>Publication studio</span>
+        </div>
+        <div class="masthead-actions">
+          <span class="connection" id="connection"><i></i> Local</span>
+          <button class="button button--quiet" id="new-button" type="button">New candidate</button>
+          <button class="button button--ink" id="build-button" type="button">Build release</button>
+        </div>
+      </header>
+
+      <aside class="queue" id="queue" aria-label="Publication queue">
+        <div class="queue-heading">
+          <div><span class="kicker">Desk queue</span><h1>Publications</h1></div>
+          <output id="queue-count" aria-live="polite">—</output>
+        </div>
+        <label class="search-field" for="search">
+          <span class="sr-only">Search publications</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="m16 16 4 4"></path></svg>
+          <input id="search" type="search" placeholder="Search title, slug, or ID" autocomplete="off">
+          <kbd>/</kbd>
+        </label>
+        <div class="filters">
+          <label><span>State</span><select id="state-filter"><option value="">All states</option></select></label>
+          <label><span>Kind</span><select id="kind-filter"><option value="">All kinds</option><option>work</option><option>knowledge</option><option>log</option><option>page</option></select></label>
+        </div>
+        <div class="queue-list" id="queue-list" aria-busy="true"></div>
+      </aside>
+
+      <main class="review" id="review" tabindex="-1">
+        <div class="empty-state" id="empty-state">
+          <span class="folio">01</span><span class="kicker">Review desk</span>
+          <h2>Select a publication to inspect its exact public revision.</h2>
+          <p>Working notes remain private until you approve the exposure hash shown here.</p>
+        </div>
+        <article id="detail" hidden></article>
+      </main>
+
+      <aside class="context-rail" id="context-rail" aria-label="Review context">
+        <section><span class="kicker">Desk summary</span><dl id="summary"><div><dt>In review</dt><dd>—</dd></div><div><dt>Blocked</dt><dd>—</dd></div><div><dt>Published</dt><dd>—</dd></div></dl></section>
+        <section><span class="kicker">Safety rule</span><p>Approval binds the exact public content and asset hashes. A later source edit cannot silently change the live revision.</p></section>
+        <section id="diagnostic-rail"><span class="kicker">Diagnostics</span><p class="muted">Select a publication to see review findings.</p></section>
+      </aside>
+    </div>
+
+    <dialog id="workflow-dialog" aria-labelledby="workflow-title">
+      <form id="workflow-form" method="dialog">
+        <header><div><span class="kicker">Create workflow</span><h2 id="workflow-title">New candidate</h2></div><button class="icon-button" value="cancel" aria-label="Close dialog" type="submit">×</button></header>
+        <label>Action<select name="action" id="workflow-action"><option value="candidates">Candidate</option><option value="projects">Project</option><option value="extractions">Extract</option></select></label>
+        <label>Source path<input name="path" required placeholder="notes/example.md"></label>
+        <input name="expectedHash" type="hidden">
+        <label>Public kind<select name="kind"><option>knowledge</option><option>work</option><option>log</option><option>page</option></select></label>
+        <label class="candidate-only">Mode<select name="mode"><option>projection</option><option>mirror</option></select></label>
+        <label class="advanced-only" hidden>Destination path<input name="to" placeholder="public-views/example.md"></label>
+        <fieldset class="extract-only" hidden><legend>Extraction selector</legend><label>Heading<input name="heading" placeholder="Research notes"></label><label>Block ID<input name="block" placeholder="public-summary"></label><label>Line range<input name="lines" placeholder="14:32" pattern="\d+:\d+"></label></fieldset>
+        <p class="form-note">Nothing is public until its compiled exposure hash is approved.</p>
+        <footer><button class="button button--quiet" value="cancel" type="submit">Cancel</button><button class="button button--ink" value="default" type="submit">Create candidate</button></footer>
+      </form>
+    </dialog>
+
+    <dialog id="confirm-dialog" aria-labelledby="confirm-title"><form method="dialog"><span class="kicker">Confirm exact revision</span><h2 id="confirm-title">Confirm action</h2><p id="confirm-copy"></p><label id="redirect-field" hidden>Optional redirect<input id="redirect-input" placeholder="/new-slug/"></label><footer><button class="button button--quiet" value="cancel" type="submit">Cancel</button><button class="button button--danger" id="confirm-action" value="confirm" type="submit">Confirm</button></footer></form></dialog>
+    <dialog id="metadata-dialog" aria-labelledby="metadata-title">
+      <form id="metadata-form" method="dialog">
+        <header><div><span class="kicker">Publication record</span><h2 id="metadata-title">Edit source metadata</h2></div><button class="icon-button" value="cancel" aria-label="Close dialog" type="submit">×</button></header>
+        <input name="publicId" type="hidden"><input name="expectedHash" type="hidden">
+        <label>Title<input name="title" required maxlength="240"></label>
+        <label>Public slug<input name="slug" required maxlength="512" placeholder="/knowledge/example"></label>
+        <label>Summary<textarea name="summary" rows="4" maxlength="1000"></textarea></label>
+        <label>Tags<input name="tags" placeholder="design, publishing"></label>
+        <fieldset class="visibility-fields"><legend>Visibility</legend><label><input name="listed" type="checkbox"> Show in listings</label><label><input name="index" type="checkbox"> Allow search indexing</label><label><input name="feed" type="checkbox"> Include in feeds</label></fieldset>
+        <p class="form-note">Saving edits the private source with an exact source-hash check. Approval is still a separate action.</p>
+        <footer><button class="button button--quiet" value="cancel" type="submit">Cancel</button><button class="button button--ink" value="save" type="submit">Save metadata</button></footer>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

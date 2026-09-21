@@ -1,0 +1,24 @@
+---
+import BaseLayout from "../../components/BaseLayout.astro";
+import EntryList from "../../components/EntryList.astro";
+import PageHeader from "../../components/PageHeader.astro";
+import { collectionPages, loadContent } from "../../lib/content.ts";
+import type { PublicKind } from "../../lib/content.ts";
+
+type CollectionKind = Exclude<PublicKind, "page">;
+type Props = { readonly kind: CollectionKind };
+export const getStaticPaths = () => (["work", "knowledge", "log"] satisfies readonly CollectionKind[]).map((kind) => ({ params: { kind }, props: { kind } }));
+const { kind } = Astro.props;
+const { pages } = await loadContent();
+const collection = collectionPages(pages, kind);
+const copy = {
+  work: ["Work", "Projects, collaborations, and outcomes."],
+  knowledge: ["Knowledge", "Guides, research, decisions, and durable references."],
+  log: ["Log", "Dated observations from work in progress."],
+} satisfies Record<CollectionKind, readonly [string, string]>;
+const [title, summary] = copy[kind];
+---
+<BaseLayout title={`${title} — Wikai`} description={summary} noindex={kind === "log"}>
+  <PageHeader eyebrow={`${collection.length} public entries`} title={title} summary={summary} />
+  <EntryList pages={collection} empty={`No ${title.toLowerCase()} entries are public yet.`} />
+</BaseLayout>

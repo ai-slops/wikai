@@ -1,0 +1,34 @@
+---
+import type { PublicPage } from "../lib/content.ts";
+import { articlePresentation, publicPathFor, safeCanonical } from "../lib/content.ts";
+import ArticleMeta from "./ArticleMeta.astro";
+import BaseLayout from "./BaseLayout.astro";
+import PageHeader from "./PageHeader.astro";
+import TagList from "./TagList.astro";
+import TableOfContents from "./TableOfContents.astro";
+
+type Props = { readonly page: PublicPage; readonly pages: readonly PublicPage[] };
+const { page, pages } = Astro.props;
+const description = page.metadata.summary ?? `${page.metadata.title} on Wikai`;
+const canonical = safeCanonical(page, Astro.site ?? Astro.url);
+const presentation = articlePresentation(page.metadata.title, page.html);
+const backlinkPath = (publicId: string): string => {
+  const source = pages.find((candidate) => candidate.metadata.id === publicId);
+  return source === undefined ? "/search/" : publicPathFor(source);
+};
+---
+<BaseLayout title={`${page.metadata.title} — Wikai`} description={description} canonical={canonical} noindex={!page.metadata.index}>
+  <article>
+    <PageHeader eyebrow={page.metadata.kind} title={page.metadata.title} {...(page.metadata.summary === undefined ? {} : { summary: page.metadata.summary })} {...(presentation.headingId === undefined ? {} : { headingId: presentation.headingId })} />
+    <ArticleMeta page={page} />
+    <TagList tags={page.metadata.tags} />
+    {page.metadata.kind === "knowledge" && <TableOfContents items={presentation.toc} />}
+    <div class="prose" set:html={presentation.html} />
+    {page.backlinks.length > 0 && (
+      <aside class="backlinks" aria-labelledby="backlinks-title">
+        <h2 id="backlinks-title">Referenced by</h2>
+        <ul>{page.backlinks.map((link) => <li><a href={backlinkPath(link.publicId)}>{link.title}</a></li>)}</ul>
+      </aside>
+    )}
+  </article>
+</BaseLayout>

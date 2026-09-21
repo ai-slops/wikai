@@ -1,0 +1,16 @@
+---
+import Article from "../components/Article.astro";
+import RedirectPage from "../components/RedirectPage.astro";
+import { loadContent } from "../lib/content.ts";
+import type { PublicPage } from "../lib/content.ts";
+
+type Props = Readonly<{ type: "page"; page: PublicPage; pages: readonly PublicPage[] }> | Readonly<{ type: "redirect"; target: string }>;
+export const getStaticPaths = async () => {
+  const { pages, redirects } = await loadContent();
+  const pagePaths = pages.filter((page) => page.metadata.kind === "page" && page.metadata.page?.layout !== "home").map((page) => ({ params: { path: page.metadata.slug.slice(1) }, props: { type: "page", page, pages } }));
+  const redirectPaths = redirects.map((redirect) => ({ params: { path: redirect.from.slice(1) }, props: { type: "redirect", target: redirect.to } }));
+  return [...pagePaths, ...redirectPaths];
+};
+const props = Astro.props;
+---
+{props.type === "page" ? <Article page={props.page} pages={props.pages} /> : <RedirectPage target={props.target} />}

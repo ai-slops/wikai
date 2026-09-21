@@ -1,0 +1,16 @@
+---
+type Props = { readonly target: string };
+const { target } = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex,follow" />
+    <meta http-equiv="refresh" content={`0;url=${target}`} />
+    <link rel="canonical" href={target} />
+    <title>Moved — Wikai</title>
+  </head>
+  <body><main><h1>This page moved</h1><p><a href={target}>Continue to the current page</a>.</p></main></body>
+</html>

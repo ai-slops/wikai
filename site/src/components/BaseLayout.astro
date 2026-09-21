@@ -1,0 +1,51 @@
+---
+import "../styles/global.css";
+
+type Props = {
+  readonly title: string;
+  readonly description: string;
+  readonly canonical?: URL;
+  readonly noindex?: boolean;
+};
+
+const { title, description, canonical = Astro.url, noindex = false } = Astro.props;
+const current = Astro.url.pathname;
+const nav = [
+  ["Work", "/work/"],
+  ["Knowledge", "/knowledge/"],
+  ["Log", "/log/"],
+  ["About", "/about/"],
+  ["Now", "/now/"],
+  ["Search", "/search/"],
+] as const;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <meta name="robots" content={noindex ? "noindex,follow" : "index,follow"} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <link rel="canonical" href={canonical} />
+    <link rel="alternate" type="application/atom+xml" title="Wikai feed" href="/feeds/all.xml" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <header class="shell site-header">
+      <a class="wordmark" href="/">Wikai</a>
+      <nav class="site-nav" aria-label="Primary">
+        {nav.map(([label, href]) => <a href={href} aria-current={current.startsWith(href) ? "page" : undefined}>{label}</a>)}
+      </nav>
+    </header>
+    <main id="content" class="shell"><slot /></main>
+    <footer class="shell site-footer">
+      <span>Selected work, knowledge, and field notes.</span>
+      <a href="/contact/">Contact</a>
+    </footer>
+  </body>
+</html>

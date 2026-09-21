@@ -1,0 +1,9 @@
+---
+type Props = { readonly eyebrow: string; readonly title: string; readonly summary?: string; readonly headingId?: string };
+const { eyebrow, title, summary, headingId } = Astro.props;
+---
+<header class="page-header">
+  <p class="eyebrow">{eyebrow}</p>
+  <h1 id={headingId}>{title}</h1>
+  {summary && <p class="lead">{summary}</p>}
+</header>

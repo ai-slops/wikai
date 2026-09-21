@@ -1,0 +1,23 @@
+---
+import type { PublicPage } from "../lib/content.ts";
+import { formatPublicDate, publicPathFor } from "../lib/content.ts";
+import TagList from "./TagList.astro";
+
+type Props = { readonly pages: readonly PublicPage[]; readonly empty: string };
+const { pages, empty } = Astro.props;
+const dateFor = (page: PublicPage): string => page.metadata.log?.occurredAt ?? page.metadata.publishedAt ?? page.metadata.updatedAt ?? "Undated";
+---
+{pages.length === 0 ? <p class="lead">{empty}</p> : (
+  <ol class="entry-list">
+    {pages.map((page) => (
+      <li class="entry">
+        <div class="entry-meta"><span>{page.metadata.kind}</span><br />{dateFor(page) === "Undated" ? <span>Undated</span> : <time datetime={dateFor(page)}>{formatPublicDate(dateFor(page))}</time>}</div>
+        <div>
+          <h3><a href={publicPathFor(page)}>{page.metadata.title}</a></h3>
+          {page.metadata.summary && <p>{page.metadata.summary}</p>}
+          <TagList tags={page.metadata.tags} />
+        </div>
+      </li>
+    ))}
+  </ol>
+)}

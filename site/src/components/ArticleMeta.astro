@@ -1,0 +1,35 @@
+---
+import { formatPublicDate } from "../lib/content.ts";
+import type { PublicPage } from "../lib/content.ts";
+
+type Props = { readonly page: PublicPage };
+const { page } = Astro.props;
+const { metadata } = page;
+type MetaDate = Readonly<{ label: string; value: string }>;
+const dates = [
+  ...(metadata.publishedAt === undefined ? [] : [{ label: "Published", value: metadata.publishedAt }]),
+  ...(metadata.updatedAt === undefined ? [] : [{ label: "Updated", value: metadata.updatedAt }]),
+  ...(metadata.lastReviewedAt === undefined ? [] : [{ label: "Reviewed", value: metadata.lastReviewedAt }]),
+] satisfies readonly MetaDate[];
+const workDates = metadata.kind === "work" ? [
+  ...(metadata.work?.startedAt === undefined ? [] : [{ label: "Started", value: metadata.work.startedAt }]),
+  ...(metadata.work?.endedAt === undefined ? [] : [{ label: "Ended", value: metadata.work.endedAt }]),
+] satisfies readonly MetaDate[] : [];
+const verifiedAt = metadata.kind === "knowledge" ? metadata.knowledge?.lastVerifiedAt ?? metadata.lastVerifiedAt : undefined;
+---
+<dl class="article-meta">
+  {metadata.kind === "work" && metadata.work?.role && <><dt>Role</dt><dd>{metadata.work.role}</dd></>}
+  {metadata.kind === "work" && metadata.work?.projectStatus && <><dt>Status</dt><dd>{metadata.work.projectStatus}</dd></>}
+  {metadata.kind === "knowledge" && metadata.contentState && <><dt>Status</dt><dd>{metadata.contentState}</dd></>}
+  {metadata.kind === "knowledge" && metadata.knowledge?.documentType && <><dt>Document type</dt><dd>{metadata.knowledge.documentType}</dd></>}
+  {metadata.kind === "log" && metadata.log && <><dt>Occurred</dt><dd><time datetime={metadata.log.occurredAt}>{formatPublicDate(metadata.log.occurredAt)}</time></dd></>}
+  {workDates.map(({ label, value }) => <><dt>{label}</dt><dd><time datetime={value}>{formatPublicDate(value)}</time></dd></>)}
+  {verifiedAt && <><dt>Verified</dt><dd><time datetime={verifiedAt}>{formatPublicDate(verifiedAt)}</time></dd></>}
+  {dates.map(({ label, value }) => <><dt>{label}</dt><dd><time datetime={value}>{formatPublicDate(value)}</time></dd></>)}
+</dl>
+{metadata.kind === "work" && metadata.work?.links && metadata.work.links.length > 0 && (
+  <nav class="work-links" aria-label="Project links">
+    <span class="eyebrow">Project links</span>
+    <ul>{metadata.work.links.map((link) => <li><a href={link.url}>{link.label}</a>{link.type && <span> / {link.type}</span>}</li>)}</ul>
+  </nav>
+)}
