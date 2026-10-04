@@ -9,6 +9,13 @@ import type {
   ReleaseManifest,
 } from "../model/index.ts";
 import { ReleaseError } from "./error.ts";
+import {
+  redirectsPolicyHash,
+  releasePolicyHash,
+  revisionsForRelease,
+  writeReleaseIdentity,
+} from "./receipt.ts";
+import { validateReleaseGraph } from "./routes.ts";
 
 export { buildSite, createExportSpec, createSandboxSpec, type SandboxSpec } from "./site-build.ts";
 
@@ -48,88 +55,6 @@ const backlinksFor = (
     )
     .map(publicLink)
     .sort((left, right) => left.slug.localeCompare(right.slug));
-
-const validateRoute = (route: string): void => {
-  const decodedSegments = route.split("/").map((segment) => {
-    try {
-      return decodeURIComponent(segment);
-    } catch (error) {
-      if (error instanceof URIError) return "..";
-      throw error;
-    }
-  });
-  const hasControlCharacter = [...route].some((character) => {
-    const code = character.charCodeAt(0);
-    return code <= 31 || code === 127;
-  });
-  if (
-    !route.startsWith("/") ||
-    (route !== "/" && route.endsWith("/")) ||
-    route.includes("//") ||
-    route.includes("?") ||
-    route.includes("#") ||
-    route.includes("\\") ||
-    hasControlCharacter ||
-    decodedSegments.some(
-      (segment) =>
-        segment === "." || segment === ".." || segment.includes("/") || segment.includes("\\"),
-    ) ||
-    route !== route.normalize("NFC")
-  )
-    throw new ReleaseError(
-      "RELEASE_INVALID_ROUTE",
-      "Public slugs and redirects must be canonical absolute paths",
-    );
-};
-
-const validateReleaseGraph = (
-  approved: readonly ApprovedRevision[],
-  redirects: readonly { readonly from: string; readonly to: string; readonly status: 301 }[],
-): void => {
-  const byId = new Map(approved.map((revision) => [revision.publicId, revision]));
-  const routes = new Set<string>();
-  if (byId.size !== approved.length)
-    throw new ReleaseError(
-      "RELEASE_DUPLICATE_ID",
-      "Approved revisions contain a duplicate public identifier",
-    );
-  for (const revision of approved) {
-    validateRoute(revision.metadata.slug);
-    const routeMatchesKind =
-      revision.metadata.kind === "page"
-        ? (revision.metadata.page?.layout === "home") === (revision.metadata.slug === "/")
-        : revision.metadata.slug.startsWith(`/${revision.metadata.kind}/`);
-    if (!routeMatchesKind)
-      throw new ReleaseError(
-        "RELEASE_INVALID_ROUTE",
-        "A public route does not match its content kind",
-      );
-    if (routes.has(revision.metadata.slug))
-      throw new ReleaseError(
-        "RELEASE_DUPLICATE_ROUTE",
-        "Approved revisions contain a duplicate public route",
-      );
-    routes.add(revision.metadata.slug);
-    for (const link of revision.outgoingLinks) {
-      const target = byId.get(link.publicId);
-      if (target === undefined || target.metadata.slug !== link.slug)
-        throw new ReleaseError(
-          "RELEASE_DANGLING_LINK",
-          "Approved content contains a link outside the approved release graph",
-        );
-    }
-  }
-  for (const redirect of redirects) {
-    validateRoute(redirect.from);
-    validateRoute(redirect.to);
-    if (routes.has(redirect.from) || !routes.has(redirect.to))
-      throw new ReleaseError(
-        "RELEASE_INVALID_REDIRECT",
-        "A redirect collides with or points outside the approved route graph",
-      );
-    routes.add(redirect.from);
-  }
-};
 
 const contentPath = (root: string, revision: ApprovedRevision): string => {
   const kindPrefix = revision.metadata.kind === "page" ? "" : `/${revision.metadata.kind}`;
@@ -248,6 +173,12 @@ export const buildReleaseStaging = async (
       ),
     ]);
     await replaceDirectory(temporary, target);
+    await writeReleaseIdentity(config.publisher.stateDir, {
+      schemaVersion: 1,
+      revisions: revisionsForRelease(ordered),
+      redirectsHash: redirectsPolicyHash(redirects),
+      stagingPolicyHash: await releasePolicyHash(target),
+    });
     return manifest;
   } catch (error) {
     await rm(temporary, { recursive: true, force: true });

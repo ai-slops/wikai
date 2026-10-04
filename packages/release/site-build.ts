@@ -1,9 +1,16 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { fingerprintDirectory } from "../deploy/filesystem.ts";
 import { replaceDirectory } from "../fs/index.ts";
 import type { PublisherConfig, VaultSnapshot } from "../model/index.ts";
 import { ReleaseError } from "./error.ts";
+import {
+  directoryFingerprintHash,
+  readReleaseIdentity,
+  releasePolicyHash,
+  writeReleaseReceipt,
+} from "./receipt.ts";
 
 export type SandboxSpec = Readonly<{
   createArgs: readonly string[];
@@ -135,18 +142,29 @@ export const buildSite = async (
   await mkdir(dirname(config.site.distDir), { recursive: true });
   const temporary = await mkdtemp(join(dirname(config.site.distDir), ".site-dist-"));
   const rendered = join(temporary, "export");
+  const staging = join(temporary, "staging");
   let rendererCreated = false;
   let stagingCreated = false;
   let exporterCreated = false;
   let volumeCreated = false;
   try {
+    await cp(config.publisher.releaseStagingDir, staging, {
+      recursive: true,
+      dereference: false,
+      errorOnExist: true,
+      force: false,
+    });
+    await fingerprintDirectory(staging);
+    const identity = await readReleaseIdentity(config.publisher.stateDir);
+    if ((await releasePolicyHash(staging)) !== identity.stagingPolicyHash) {
+      throw new ReleaseError(
+        "RELEASE_IDENTITY_CHANGED",
+        "Release staging changed after its private identity was recorded",
+      );
+    }
     await docker(["create", "--name", stagingContainer, config.site.image]);
     stagingCreated = true;
-    await docker([
-      "cp",
-      `${config.publisher.releaseStagingDir}/.`,
-      `${stagingContainer}:${spec.stagingPath}`,
-    ]);
+    await docker(["cp", `${staging}/.`, `${stagingContainer}:${spec.stagingPath}`]);
     await docker(["commit", stagingContainer, runtimeImage]);
     await docker(["rm", "--force", stagingContainer]);
     stagingCreated = false;
@@ -167,13 +185,21 @@ export const buildSite = async (
     await docker(["start", exportContainer]);
     await docker(["cp", `${exportContainer}:/dist/.`, rendered], 60_000);
     const { auditDist } = await import("../audit/index.ts");
-    const diagnostics = await auditDist(rendered, config, vault);
+    const auditConfig = {
+      ...config,
+      publisher: { ...config.publisher, releaseStagingDir: staging },
+    };
+    const diagnostics = await auditDist(rendered, auditConfig, vault);
     const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "error");
     if (errors.length > 0)
       throw new ReleaseError(
         "RELEASE_AUDIT_FAILED",
         `Rendered output failed the privacy audit: ${errors.map((diagnostic) => diagnostic.code).join(", ")}`,
       );
+    await writeReleaseReceipt(config.publisher.stateDir, {
+      ...identity,
+      distFingerprintHash: directoryFingerprintHash(await fingerprintDirectory(rendered)),
+    });
     await replaceDirectory(rendered, config.site.distDir);
     await rm(temporary, { recursive: true, force: true });
     return { distPath: config.site.distDir };

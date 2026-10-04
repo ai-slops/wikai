@@ -2,6 +2,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { hash } from "../fs/index.ts";
 import type { ApprovedRevision, PublisherConfig } from "../model/index.ts";
 import { buildReleaseStaging, buildSite, createExportSpec, createSandboxSpec } from "./index.ts";
 
@@ -61,7 +62,7 @@ const revision = (
   links: ApprovedRevision["outgoingLinks"] = [],
 ): ApprovedRevision => ({
   publicId,
-  revisionHash: `rev-${publicId}`,
+  revisionHash: hash(`rev-${publicId}`),
   exposureHash: `exp-${publicId}`,
   metadata: {
     id: publicId,
@@ -98,12 +99,17 @@ describe("release staging", () => {
       "utf8",
     );
     const search = await readFile(join(root, "staging", "search-index.json"), "utf8");
+    const privateIdentity = await readFile(join(root, "state", "release-input.json"), "utf8");
     const index: unknown = JSON.parse(raw);
     expect(manifest.pages).toHaveLength(2);
     expect(raw).not.toContain("revisionHash");
     expect(raw).not.toContain("approvedAt");
     expect(markdown).toBe("# /knowledge/first");
     expect(search).not.toContain("revisionHash");
+    expect(privateIdentity).toContain(first.revisionHash);
+    expect(
+      await readFile(join(root, "staging", "publication-manifest.json"), "utf8"),
+    ).not.toContain(first.revisionHash);
     expect(index).toMatchObject({
       pages: [
         { backlinks: [] },
@@ -195,6 +201,7 @@ if (process.argv[2] === "wait") process.stdout.write("17\\n");
     };
     await mkdir(join(root, "dist"), { recursive: true });
     await writeFile(join(root, "dist", "existing.txt"), "preserve me");
+    await buildReleaseStaging([], config());
     await expect(buildSite(config())).rejects.toMatchObject({ code: "RELEASE_BUILD_FAILED" });
     const invocations = await readFile(log, "utf8");
     expect(invocations).toContain("wait wikai-site-");
