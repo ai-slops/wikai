@@ -1,14 +1,24 @@
 import { resolve, sep } from "node:path";
 import type { Diagnostic, PublisherConfig, VaultSnapshot } from "../model/index.ts";
 
-const SECRET_PATTERNS = [
+export const CREDENTIAL_PATTERNS = [
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
   /\bAKIA[0-9A-Z]{16}\b/,
   /\bgh[opusr]_[A-Za-z0-9_]{30,}\b/,
   /\b(?:api[_-]?key|secret|password)\s*[:=]\s*["'][^"']{12,}["']/i,
 ] as const;
 
-type PrivateMarkers = Readonly<{ ids: readonly string[]; paths: readonly string[] }>;
+type PrivateMarkers = Readonly<{
+  ids: readonly string[];
+  paths: readonly string[];
+  titles: readonly string[];
+}>;
+
+export type SensitiveTextContext = Readonly<{
+  config: PublisherConfig["security"];
+  sourcePath?: string;
+  publicId?: string;
+}>;
 
 const diagnostic = (code: string, message: string, sourcePath?: string): Diagnostic => ({
   code,
@@ -23,7 +33,69 @@ const pathVariants = (path: string): readonly string[] => [
   path.split(sep).join("/"),
 ];
 
-export const privateMarkers = (config: PublisherConfig, vault?: VaultSnapshot): PrivateMarkers => {
+const warning = (code: string, message: string, context: SensitiveTextContext): Diagnostic => ({
+  code,
+  severity: "warning",
+  message,
+  ...(context.sourcePath === undefined ? {} : { sourcePath: context.sourcePath }),
+  ...(context.publicId === undefined ? {} : { publicId: context.publicId }),
+});
+
+const entropy = (value: string): number => {
+  const counts = new Map<string, number>();
+  for (const character of value) counts.set(character, (counts.get(character) ?? 0) + 1);
+  return [...counts.values()].reduce((total, count) => {
+    const probability = count / value.length;
+    return total - probability * Math.log2(probability);
+  }, 0);
+};
+
+const withoutExpectedIdentifiers = (text: string): string =>
+  text
+    .replace(/\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b/giu, " ")
+    .replace(/\b(?:sha(?:256|384|512)|md5):[0-9a-f]+\b/giu, " ")
+    .replace(/\b[0-9a-f]{32,}\b/giu, " ");
+
+const entropyCandidates = (text: string): readonly string[] =>
+  withoutExpectedIdentifiers(text).match(/[A-Za-z0-9_+/=-]{24,}/gu) ?? [];
+
+const containsPhoneNumber = (text: string): boolean =>
+  [
+    ...withoutExpectedIdentifiers(text).matchAll(
+      /(?<![A-Za-z0-9])\+?\d[\d .()-]{6,}\d(?![A-Za-z0-9])/gu,
+    ),
+  ].some((match) => {
+    const digitCount = (match[0].match(/\d/gu) ?? []).length;
+    return digitCount >= 8 && digitCount <= 15;
+  });
+
+export const scanSensitiveText = (
+  text: string,
+  context: SensitiveTextContext,
+): readonly Diagnostic[] => {
+  const diagnostics: Diagnostic[] = [];
+  if ((context.config.scanPii ?? true) && /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu.test(text))
+    diagnostics.push(warning("PRIVACY_EMAIL", "Public text may contain an email address", context));
+  if ((context.config.scanPii ?? true) && containsPhoneNumber(text))
+    diagnostics.push(warning("PRIVACY_PHONE", "Public text may contain a phone number", context));
+  if (
+    (context.config.scanHighEntropy ?? true) &&
+    entropyCandidates(text).some(
+      (candidate) =>
+        !CREDENTIAL_PATTERNS.some((pattern) => pattern.test(candidate)) && entropy(candidate) >= 4,
+    )
+  )
+    diagnostics.push(
+      warning("PRIVACY_HIGH_ENTROPY", "Public text may contain an opaque sensitive value", context),
+    );
+  return diagnostics;
+};
+
+export const privateMarkers = (
+  config: PublisherConfig,
+  vault?: VaultSnapshot,
+  approvedTitles: ReadonlySet<string> = new Set(),
+): PrivateMarkers => {
   const roots = [resolve(config.vault.root)];
   if ("local" in config.vault && typeof config.vault.local === "string")
     roots.push(resolve(config.vault.local));
@@ -36,7 +108,20 @@ export const privateMarkers = (config: PublisherConfig, vault?: VaultSnapshot): 
       document.sourcePath,
       ...roots.map((root) => resolve(root, document.sourcePath)),
     ]) ?? [];
-  return { ids, paths: [...new Set([...roots, ...sourcePaths].flatMap(pathVariants))] };
+  const normalizedApprovedTitles = new Set(
+    [...approvedTitles].map((title) => title.normalize("NFC").toLocaleLowerCase("en-US")),
+  );
+  const titles =
+    vault?.documents.flatMap((document) => {
+      const title = document.frontmatter.title?.trim();
+      if (
+        title === undefined ||
+        normalizedApprovedTitles.has(title.normalize("NFC").toLocaleLowerCase("en-US"))
+      )
+        return [];
+      return [title];
+    }) ?? [];
+  return { ids, paths: [...new Set([...roots, ...sourcePaths].flatMap(pathVariants))], titles };
 };
 
 export const scanText = (
@@ -54,6 +139,7 @@ export const scanText = (
     if (!(error instanceof URIError)) throw error;
   }
   const searchable = `${text}\n${decoded}`;
+  diagnostics.push(...scanSensitiveText(searchable, { config: config.security, sourcePath: path }));
   if (
     config.security.scanPrivateIdsInDist &&
     (/\bprv_[A-Za-z0-9_-]+\b/.test(searchable) || markers.ids.some((id) => searchable.includes(id)))
@@ -99,9 +185,24 @@ export const scanText = (
         ),
       );
   }
-  if (SECRET_PATTERNS.some((pattern) => pattern.test(searchable)))
+  if (CREDENTIAL_PATTERNS.some((pattern) => pattern.test(searchable)))
     diagnostics.push(
       diagnostic("AUDIT_SECRET", "Rendered output contains material resembling a credential", path),
+    );
+  if (
+    (config.security.warnPrivateTitles ?? true) &&
+    markers.titles.some((title) =>
+      searchable
+        .normalize("NFC")
+        .toLocaleLowerCase("en-US")
+        .includes(title.normalize("NFC").toLocaleLowerCase("en-US")),
+    )
+  )
+    diagnostics.push(
+      warning("PRIVACY_PRIVATE_TITLE", "Public output may contain a private document title", {
+        config: config.security,
+        sourcePath: path,
+      }),
     );
   return diagnostics;
 };

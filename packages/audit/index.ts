@@ -184,9 +184,10 @@ export const auditDist = async (
           file,
         ),
       );
-  const markers = privateMarkers(config, vault);
+  const markers = privateMarkers(config, vault, new Set(policy.pages.map((page) => page.title)));
   for (const file of files) {
     const relativePath = normalizedRelative(path, file);
+    diagnostics.push(...scanText(relativePath, relativePath, config, markers, policy.approvedIds));
     const info = await lstat(file);
     if (info.isSymbolicLink()) {
       diagnostics.push(

@@ -61,7 +61,7 @@ describe("secure compiler", () => {
     // Given two explicitly public documents and one ordinary private note.
     await writeFile(
       join(root, "mirror.md"),
-      "---\nid: prv_mirror\ntitle: Private title\nsecret: hidden\npublic:\n  id: pub_mirror\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Public title\n  privateNested: hidden\n---\n# Public title\nSee [the guide](Guide.md#Install) and [[Guide#Install|setup]].\n",
+      "---\nid: prv_mirror\ntitle: Private title\nsecret: hidden\npublic:\n  id: pub_mirror\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/public-title\n  title: Public title\n  summary: Public knowledge\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n# Public title\nSee [the guide](Guide.md#Install) and [[Guide#Install|setup]].\n",
     );
     await writeFile(
       join(root, "private.md"),
@@ -95,11 +95,11 @@ describe("secure compiler", () => {
     // Given a source linking to a published-looking but unapproved private target.
     await writeFile(
       join(root, "source.md"),
-      "---\nid: prv_source\npublic:\n  id: pub_source\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Source\n---\n[secret](private.md)\n",
+      "---\nid: prv_source\npublic:\n  id: pub_source\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/source\n  title: Source\n  summary: Source page\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n[secret](private.md)\n",
     );
     await writeFile(
       join(root, "private.md"),
-      "---\nid: prv_private\ntitle: Private\npublic:\n  id: pub_private\n  status: published\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n---\nprivate\n",
+      "---\nid: prv_private\ntitle: Private\npublic:\n  id: pub_private\n  status: published\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/private\n  summary: Private target\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\nprivate\n",
     );
 
     // When compiling without an approved target.
@@ -120,11 +120,11 @@ describe("secure compiler", () => {
     // Given a private-path link whose target has an approved revision with different public metadata.
     await writeFile(
       join(root, "source.md"),
-      "---\nid: prv_source\npublic:\n  id: pub_source\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Source\n---\n[explicit label](private.md#Approved)\n",
+      "---\nid: prv_source\npublic:\n  id: pub_source\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/source\n  title: Source\n  summary: Source page\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n[explicit label](private.md#Approved)\n",
     );
     await writeFile(
       join(root, "private.md"),
-      "---\nid: prv_private\ntitle: Private working title\npublic:\n  id: pub_private\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n---\n# Working heading\n",
+      "---\nid: prv_private\ntitle: Private working title\npublic:\n  id: pub_private\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/private-working\n  summary: Working target\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n# Working heading\n",
     );
 
     // When compiling with the target's immutable approved revision.
@@ -157,7 +157,7 @@ describe("secure compiler", () => {
     // Given an internal link and, optionally, a wholly private target.
     await writeFile(
       join(root, "source.md"),
-      `---\nid: prv_source\npublic:\n  id: pub_source\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Source\n---\n[target](${target})\n`,
+      `---\nid: prv_source\npublic:\n  id: pub_source\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/source\n  title: Source\n  summary: Source page\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n[target](${target})\n`,
     );
     if (targetBody) await writeFile(join(root, "private.md"), targetBody);
 
@@ -174,7 +174,7 @@ describe("secure compiler", () => {
     await writeFile(join(root, "b.md"), "---\nid: prv_b\ntitle: Same\n---\nb\n");
     await writeFile(
       join(root, "source.md"),
-      "---\nid: prv_source\npublic:\n  id: pub_source\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Source\n---\n[[Same]]\n",
+      "---\nid: prv_source\npublic:\n  id: pub_source\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/source\n  title: Source\n  summary: Source page\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n[[Same]]\n",
     );
 
     // When compiled, then title ambiguity blocks the publication.
@@ -188,12 +188,12 @@ describe("secure compiler", () => {
     // Given duplicate private titles but an exact private-ID link to an approved target.
     await writeFile(
       join(root, "a.md"),
-      "---\nid: prv_a\ntitle: Same\npublic:\n  id: pub_a\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n---\n# Approved\n",
+      "---\nid: prv_a\ntitle: Same\npublic:\n  id: pub_a\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/same\n  summary: Same page\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n# Approved\n",
     );
     await writeFile(join(root, "b.md"), "---\nid: prv_b\ntitle: Same\n---\nb\n");
     await writeFile(
       join(root, "source.md"),
-      "---\nid: prv_source\npublic:\n  id: pub_source\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Source\n---\n[[prv_a]]\n",
+      "---\nid: prv_source\npublic:\n  id: pub_source\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/source\n  title: Source\n  summary: Source page\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n[[prv_a]]\n",
     );
 
     // When compiled, then private ID wins before the ambiguous title tier.
@@ -204,19 +204,19 @@ describe("secure compiler", () => {
     expect(source?.markdown).toContain("[Approved](/knowledge/approved)");
   });
 
-  it("keeps exposure hashes stable for private-only and timestamp changes", async () => {
-    // Given a public note with private frontmatter and a public review timestamp.
+  it("keeps exposure hashes stable for private-only changes", async () => {
+    // Given a public note with private frontmatter and stable public metadata.
     const path = join(root, "stable.md");
     await writeFile(
       path,
-      "---\nid: prv_stable\nprivateValue: one\npublic:\n  id: pub_stable\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Stable\n  lastVerifiedAt: 2026-01-01\n---\nStable body.\n",
+      "---\nid: prv_stable\nprivateValue: one\npublic:\n  id: pub_stable\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/stable\n  title: Stable\n  summary: Stable page\n  contentState: stable\n  knowledge:\n    documentType: topic\n    lastVerifiedAt: 2026-01-01\n---\nStable body.\n",
     );
     const first = await compile(await loadVault(config), config);
 
-    // When only non-exposure values change.
+    // When only private frontmatter changes.
     await writeFile(
       path,
-      "---\nid: prv_stable\nprivateValue: two\npublic:\n  id: pub_stable\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Stable\n  lastVerifiedAt: 2026-09-19\n---\nStable body.\n",
+      "---\nid: prv_stable\nprivateValue: two\npublic:\n  id: pub_stable\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/stable\n  title: Stable\n  summary: Stable page\n  contentState: stable\n  knowledge:\n    documentType: topic\n    lastVerifiedAt: 2026-01-01\n---\nStable body.\n",
     );
     const second = await compile(await loadVault(config), config);
 
@@ -224,11 +224,11 @@ describe("secure compiler", () => {
     expect(first.publications[0]?.exposureHash).toBe(second.publications[0]?.exposureHash);
   });
 
-  it("generates canonical absolute Unicode paths without double-prefixing links", async () => {
-    // Given a Unicode-titled document and an approved absolute target path.
+  it("preserves canonical absolute Unicode paths without double-prefixing links", async () => {
+    // Given an explicit Unicode route and an approved absolute target path.
     await writeFile(
       join(root, "unicode.md"),
-      "---\nid: prv_unicode\npublic:\n  id: pub_unicode\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Café 指南\n---\n[guide](Guide.md)\n",
+      "---\nid: prv_unicode\npublic:\n  id: pub_unicode\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/café-指南\n  title: Café 指南\n  summary: Unicode guide\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n[guide](Guide.md)\n",
     );
 
     // When compiled, then generated and rewritten URLs are canonical absolute paths.
@@ -261,14 +261,14 @@ describe("secure compiler", () => {
       // Given a publication without its kind-required nested metadata.
       await writeFile(
         join(root, `${kind}.md`),
-        `---\nid: prv_kind\npublic:\n  id: pub_kind\n  status: review\n  mode: mirror\n  kind: ${kind}\n  title: Kind\n---\nbody\n`,
+        `---\nid: prv_kind\npublic:\n  id: pub_kind\n  status: review\n  mode: mirror\n  kind: ${kind}\n  slug: /${kind}/kind\n  title: Kind\n---\nbody\n`,
       );
 
       // When compiled, then invalid kind metadata is blocked.
       const plan = await compile(await loadVault(config), config);
       expect(plan.publications).toEqual([]);
       expect(plan.diagnostics).toContainEqual(
-        expect.objectContaining({ code: "PUBLIC_KIND_METADATA_REQUIRED" }),
+        expect.objectContaining({ code: "PUBLIC_METADATA_REQUIRED" }),
       );
     },
   );

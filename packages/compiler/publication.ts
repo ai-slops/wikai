@@ -2,6 +2,7 @@ import { hash } from "../fs/index.ts";
 import { compileMarkdown, type LinkTarget, type VaultLinkTarget } from "../markdown/index.ts";
 import type { PrivateDocument, PublisherConfig, WorkingPublication } from "../model/index.ts";
 import { CompilerError, exposureMetadata, metadataFor } from "./metadata.ts";
+import { publicationPrivacyDiagnostics } from "./privacy.ts";
 import { selfTarget } from "./targets.ts";
 
 const CREDENTIAL_PATTERNS = [
@@ -59,6 +60,8 @@ export const compileDocument = async (
   if (!spec) throw new CompilerError("PUBLIC_SPEC_MISSING", "Public specification is missing");
   if (!document.frontmatter.id)
     throw new CompilerError("SOURCE_ID_REQUIRED", "Publication source requires a private ID");
+  if (["work", "log"].includes(spec.kind) && document.body.trim().length === 0)
+    throw new CompilerError("PUBLIC_BODY_REQUIRED", "Publication body is required");
   const metadata = metadataFor(document, context.config);
   const self = selfTarget(document, metadata);
   const transformed = await compileMarkdown({
@@ -104,5 +107,8 @@ export const compileDocument = async (
       "PUBLIC_SECRET_DETECTED",
       "Potential private data was detected in public output",
     );
-  return publication;
+  return {
+    ...publication,
+    diagnostics: [...publicationPrivacyDiagnostics(publication, context.config)],
+  };
 };

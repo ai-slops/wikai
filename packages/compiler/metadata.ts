@@ -1,10 +1,14 @@
 import GithubSlugger from "github-slugger";
 import {
+  isCanonicalPublicRoute,
+  isFixedPageRoute,
+  isRendererRoute,
   MetadataSchema,
   type PrivateDocument,
   type PublicMetadata,
   type PublicSpec,
   type PublisherConfig,
+  routeMatchesKind,
 } from "../model/index.ts";
 
 export class CompilerError extends Error {
@@ -22,29 +26,8 @@ const unreachableKind = (_kind: never): never => {
 
 export const validatePublicPath = (value: string): string => {
   const normalized = value.normalize("NFC");
-  if (!normalized.startsWith("/") || (normalized.length > 1 && normalized.endsWith("/")))
+  if (!isCanonicalPublicRoute(normalized))
     throw new CompilerError("PUBLIC_SLUG_INVALID", "Public path is not canonical");
-  const forbidden = [...normalized].some((character) => {
-    const codePoint = character.codePointAt(0) ?? 0;
-    return codePoint <= 31 || codePoint === 127 || ["?", "#", "\\"].includes(character);
-  });
-  if (forbidden || /%2f|%5c/iu.test(normalized))
-    throw new CompilerError("PUBLIC_SLUG_INVALID", "Public path contains a forbidden character");
-  try {
-    const segments = normalized.slice(1).split("/");
-    if (
-      normalized !== "/" &&
-      segments.some(
-        (segment) => segment.length === 0 || [".", ".."].includes(decodeURIComponent(segment)),
-      )
-    )
-      throw new CompilerError("PUBLIC_SLUG_INVALID", "Public path contains an unsafe segment");
-  } catch (error) {
-    if (error instanceof CompilerError) throw error;
-    if (error instanceof URIError)
-      throw new CompilerError("PUBLIC_SLUG_INVALID", "Public path encoding is invalid");
-    throw error;
-  }
   return normalized;
 };
 
@@ -76,34 +59,52 @@ const validatePublicUrl = (value: string, allowPublicPath = false): string => {
   return value;
 };
 
-const requireKindMetadata = (spec: PublicSpec): void => {
+const requireValue = (value: string | undefined): boolean =>
+  value !== undefined && value.trim().length > 0;
+
+const requireAuthoringMetadata = (document: PrivateDocument, spec: PublicSpec): void => {
+  if (spec.slug !== undefined && !requireValue(spec.slug))
+    throw new CompilerError("PUBLIC_METADATA_REQUIRED", "Public slug must not be empty");
   switch (spec.kind) {
     case "work":
-      if (!spec.work?.projectStatus)
+      if (
+        !requireValue(spec.title ?? document.frontmatter.title ?? document.headings[0]?.title) ||
+        !requireValue(spec.summary) ||
+        !requireValue(spec.work?.role) ||
+        !spec.work?.projectStatus
+      )
         throw new CompilerError(
-          "PUBLIC_KIND_METADATA_REQUIRED",
-          "Work publications require project status metadata",
+          "PUBLIC_METADATA_REQUIRED",
+          "Work publications require title, summary, role and project status",
         );
       return;
     case "knowledge":
-      if (!spec.knowledge?.documentType)
+      if (
+        !requireValue(spec.title ?? document.frontmatter.title ?? document.headings[0]?.title) ||
+        !requireValue(spec.summary) ||
+        !spec.knowledge?.documentType ||
+        !spec.contentState
+      )
         throw new CompilerError(
-          "PUBLIC_KIND_METADATA_REQUIRED",
-          "Knowledge publications require document type metadata",
+          "PUBLIC_METADATA_REQUIRED",
+          "Knowledge publications require title, summary, document type and content state",
         );
       return;
     case "log":
       if (!spec.log?.occurredAt)
         throw new CompilerError(
-          "PUBLIC_KIND_METADATA_REQUIRED",
+          "PUBLIC_METADATA_REQUIRED",
           "Log publications require occurrence metadata",
         );
       return;
     case "page":
-      if (!spec.page?.layout)
+      if (
+        !requireValue(spec.title ?? document.frontmatter.title ?? document.headings[0]?.title) ||
+        !spec.page?.layout
+      )
         throw new CompilerError(
-          "PUBLIC_KIND_METADATA_REQUIRED",
-          "Page publications require layout metadata",
+          "PUBLIC_METADATA_REQUIRED",
+          "Page publications require title and layout",
         );
       return;
     default:
@@ -114,9 +115,24 @@ const requireKindMetadata = (spec: PublicSpec): void => {
 export const metadataFor = (document: PrivateDocument, config: PublisherConfig): PublicMetadata => {
   const spec = document.frontmatter.public;
   if (!spec) throw new CompilerError("PUBLIC_SPEC_MISSING", "Public specification is missing");
-  const title = spec.title ?? document.frontmatter.title ?? document.headings[0]?.title;
+  requireAuthoringMetadata(document, spec);
+  const title =
+    spec.title ??
+    document.frontmatter.title ??
+    document.headings[0]?.title ??
+    (spec.kind === "log" ? spec.log?.occurredAt : undefined);
   if (!title) throw new CompilerError("PUBLIC_TITLE_MISSING", "Public title is required");
-  requireKindMetadata(spec);
+  const slug = slugFor(title, spec);
+  if (isRendererRoute(slug))
+    throw new CompilerError("PUBLIC_ROUTE_RESERVED", "Public path is owned by the renderer");
+  if (!routeMatchesKind(slug, spec.kind, spec.page?.layout))
+    throw new CompilerError(
+      "PUBLIC_ROUTE_KIND_MISMATCH",
+      "Public path does not match its content kind or page layout",
+    );
+  const aliases = spec.aliases.map(validatePublicPath);
+  if (aliases.some((alias) => isRendererRoute(alias) || isFixedPageRoute(alias)))
+    throw new CompilerError("PUBLIC_ROUTE_RESERVED", "Public alias is reserved");
   const defaults = config.defaults[spec.kind];
   const work = spec.work
     ? {
@@ -134,11 +150,11 @@ export const metadataFor = (document: PrivateDocument, config: PublisherConfig):
   const parsed = MetadataSchema.safeParse({
     id: spec.id,
     kind: spec.kind,
-    slug: slugFor(title, spec),
+    slug,
     title,
     summary: spec.summary,
     tags: spec.tags,
-    aliases: spec.aliases.map(validatePublicPath),
+    aliases,
     listed: spec.listed ?? defaults.listed,
     index: spec.index ?? defaults.index,
     feed: spec.feed ?? defaults.feed,

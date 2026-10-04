@@ -7,7 +7,7 @@ import type {
   PublicRedirect,
   PublisherConfig,
 } from "../model/index.ts";
-import { MetadataSchema, RedirectSchema } from "../model/index.ts";
+import { PersistedMetadataSchema, RedirectSchema } from "../model/index.ts";
 
 const StagingIndexSchema = z
   .object({
@@ -63,9 +63,9 @@ export const readAuditPolicy = async (
     const stagingIndexRaw: unknown = JSON.parse(
       await readFile(join(config.publisher.releaseStagingDir, "content-index.json"), "utf8"),
     );
-    const publicManifest = MetadataSchema.array().safeParse(pageInput(publicManifestRaw));
+    const publicManifest = PersistedMetadataSchema.array().safeParse(pageInput(publicManifestRaw));
     const publicRedirects = RedirectSchema.array().safeParse(redirectInput(publicRedirectsRaw));
-    const manifest = MetadataSchema.array().safeParse(pageInput(trustedManifestRaw));
+    const manifest = PersistedMetadataSchema.array().safeParse(pageInput(trustedManifestRaw));
     const redirects = RedirectSchema.array().safeParse(redirectInput(trustedRedirectsRaw));
     const stagingIndex = StagingIndexSchema.safeParse(stagingIndexRaw);
     if (

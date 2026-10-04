@@ -31,7 +31,7 @@ afterEach(async () => {
 });
 
 const note = (body: string): string =>
-  `---\nid: prv_note\npublic:\n  id: pub_note\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Note\n---\n${body}\n`;
+  `---\nid: prv_note\npublic:\n  id: pub_note\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/note\n  title: Note\n  summary: Asset validation\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n${body}\n`;
 
 describe("asset and vault hardening", () => {
   it("rejects a raster whose extension disagrees with detected MIME", async () => {

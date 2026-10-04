@@ -52,7 +52,7 @@ const approved = (): ApprovedRevision => ({
 });
 
 const publicNote = (body: string): string =>
-  `---\nid: prv_source\npublic:\n  id: pub_source\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Source\n---\n${body}\n`;
+  `---\nid: prv_source\npublic:\n  id: pub_source\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/source\n  title: Source\n  summary: Markdown source\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n${body}\n`;
 
 describe("Markdown edge security", () => {
   it("resolves reference-style links and slugifies raw-space headings", async () => {
@@ -63,7 +63,7 @@ describe("Markdown edge security", () => {
     );
     await writeFile(
       join(root, "Target.md"),
-      "---\nid: prv_target\ntitle: Working target\npublic:\n  id: pub_target\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n---\nworking\n",
+      "---\nid: prv_target\ntitle: Working target\npublic:\n  id: pub_target\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/working-target\n  summary: Working target\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\nworking\n",
     );
 
     // When compiled, then the reference is converted to the approved canonical link.
@@ -133,7 +133,7 @@ describe("Markdown edge security", () => {
     [
       "work link",
       "",
-      "  work:\n    projectStatus: active\n    links:\n      - label: unsafe\n        url: file:///etc/passwd\n",
+      "  work:\n    role: Engineer\n    projectStatus: active\n    links:\n      - label: unsafe\n        url: file:///etc/passwd\n",
     ],
   ])("blocks an unsafe %s URL", async (_case, canonical, kindMetadata) => {
     // Given metadata containing a non-HTTP public URL.
@@ -141,7 +141,7 @@ describe("Markdown edge security", () => {
     const nested = kindMetadata || "  knowledge:\n    documentType: topic\n";
     await writeFile(
       join(root, "unsafe-url.md"),
-      `---\nid: prv_unsafe_url\npublic:\n  id: pub_unsafe_url\n  status: review\n  mode: mirror\n  kind: ${kind}\n${nested}${canonical}  title: Unsafe URL\n---\nbody\n`,
+      `---\nid: prv_unsafe_url\npublic:\n  id: pub_unsafe_url\n  status: review\n  mode: mirror\n  kind: ${kind}\n  slug: /${kind}/unsafe-url\n  summary: Unsafe URL\n  contentState: stable\n${nested}${canonical}  title: Unsafe URL\n---\nbody\n`,
     );
 
     // When compiled, then URL parsing blocks the publication with a stable diagnostic.
@@ -171,7 +171,7 @@ describe("Markdown edge security", () => {
     await writeFile(join(root, "source.md"), publicNote("> [guide]: Target.md\n\n[read][guide]"));
     await writeFile(
       join(root, "Target.md"),
-      "---\nid: prv_target\ntitle: Working target\npublic:\n  id: pub_target\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n---\nworking\n",
+      "---\nid: prv_target\ntitle: Working target\npublic:\n  id: pub_target\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/working-target\n  summary: Working target\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\nworking\n",
     );
 
     // When compiled, then the private definition is absent and the approved URL remains.

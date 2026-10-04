@@ -39,7 +39,7 @@ describe("compiler security boundary", () => {
       .toFile(imagePath);
     await writeFile(
       join(root, "image.md"),
-      "---\nid: prv_image\npublic:\n  id: pub_image\n  status: review\n  mode: mirror\n  kind: work\n  work:\n    projectStatus: active\n  title: Image\n---\n![pixel](assets/pixel.png)\n",
+      "---\nid: prv_image\npublic:\n  id: pub_image\n  status: review\n  mode: mirror\n  kind: work\n  slug: /work/image\n  title: Image\n  summary: Image work\n  work:\n    role: Engineer\n    projectStatus: active\n---\n![pixel](assets/pixel.png)\n",
     );
     const first = await compile(await loadVault(config), config);
 
@@ -73,7 +73,7 @@ describe("compiler security boundary", () => {
     // Given adversarial public Markdown.
     await writeFile(
       join(root, "bad.md"),
-      `---\nid: prv_bad\npublic:\n  id: pub_bad\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Bad\n---\n${body}\n`,
+      `---\nid: prv_bad\npublic:\n  id: pub_bad\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/bad\n  title: Bad\n  summary: Security case\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n${body}\n`,
     );
 
     // When compiled, then it is excluded with a stable diagnostic code.
@@ -88,7 +88,7 @@ describe("compiler security boundary", () => {
     // Given code containing links and transclusion syntax.
     await writeFile(
       join(root, "code.md"),
-      "---\nid: prv_code\npublic:\n  id: pub_code\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Code\n---\n`[[private]]`\n\n```md\n![[private]]\n[private](private.md)\n```\n",
+      "---\nid: prv_code\npublic:\n  id: pub_code\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/code\n  title: Code\n  summary: Code syntax\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n`[[private]]`\n\n```md\n![[private]]\n[private](private.md)\n```\n",
     );
 
     // When compiled, then code is preserved without target resolution.
@@ -101,7 +101,7 @@ describe("compiler security boundary", () => {
     // Given projection frontmatter outside the conventional public-views directory.
     await writeFile(
       join(root, "projection.md"),
-      "---\nid: prv_projection_anywhere\npublic:\n  id: pub_projection\n  status: review\n  mode: projection\n  kind: page\n  page:\n    layout: generic\n  title: Projection\n---\nbody\n",
+      "---\nid: prv_projection_anywhere\npublic:\n  id: pub_projection\n  status: review\n  mode: projection\n  kind: page\n  slug: /projection\n  title: Projection\n  page:\n    layout: generic\n---\nbody\n",
     );
 
     // When compiled, then mode rather than directory determines projection semantics.
@@ -115,7 +115,7 @@ describe("compiler security boundary", () => {
     await writeFile(join(root, "public-assets", "manual.txt"), "safe attachment");
     await writeFile(
       join(root, "attachment.md"),
-      "---\nid: prv_attachment\npublic:\n  id: pub_attachment\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Attachment\n---\n[manual](public-assets/manual.txt)\n",
+      "---\nid: prv_attachment\npublic:\n  id: pub_attachment\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/attachment\n  title: Attachment\n  summary: Reviewed attachment\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n[manual](public-assets/manual.txt)\n",
     );
 
     // When compiled, then the attachment is blocked pending review.
@@ -133,7 +133,7 @@ describe("compiler security boundary", () => {
     await writeFile(join(root, "public-assets", "manual.txt"), content);
     await writeFile(
       join(root, "attachment.md"),
-      "---\nid: prv_attachment\npublic:\n  id: pub_attachment\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n  title: Attachment\n---\n[manual](public-assets/manual.txt)\n",
+      "---\nid: prv_attachment\npublic:\n  id: pub_attachment\n  status: review\n  mode: mirror\n  kind: knowledge\n  slug: /knowledge/attachment\n  title: Attachment\n  summary: Reviewed attachment\n  contentState: stable\n  knowledge:\n    documentType: topic\n---\n[manual](public-assets/manual.txt)\n",
     );
     const reviewedConfig: PublisherConfig = {
       ...config,

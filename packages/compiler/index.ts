@@ -8,6 +8,7 @@ import type {
   VaultSnapshot,
   WorkingPublication,
 } from "../model/index.ts";
+import { publicRouteKey } from "../model/index.ts";
 import { loadVault as readVault } from "../vault/index.ts";
 import { CompilerError } from "./metadata.ts";
 import { compileDocument } from "./publication.ts";
@@ -21,10 +22,8 @@ const errorDiagnostic = (code: string, message: string, document: PrivateDocumen
   ...(document.frontmatter.public ? { publicId: document.frontmatter.public.id } : {}),
 });
 
-const routeKey = (path: string): string => path.normalize("NFC").toLocaleLowerCase("en-US");
-
 const publicationRoutes = (publication: WorkingPublication): readonly string[] =>
-  [publication.metadata.slug, ...publication.metadata.aliases].map(routeKey);
+  [publication.metadata.slug, ...publication.metadata.aliases].map(publicRouteKey);
 
 const collisionValues = (
   publications: readonly WorkingPublication[],
@@ -89,17 +88,26 @@ export const compile = async (
         (target) =>
           target.publicId !== publication.publicId &&
           [target.slug, ...target.keys.filter((key) => key.startsWith("/"))]
-            .map(routeKey)
+            .map(publicRouteKey)
             .some((route) => routes.has(route)),
       );
       if (reservation) {
-        const directSlug = routeKey(reservation.slug) === routeKey(publication.metadata.slug);
+        const directSlug =
+          publicRouteKey(reservation.slug) === publicRouteKey(publication.metadata.slug);
         throw new CompilerError(
           directSlug ? "PUBLIC_SLUG_RESERVED" : "PUBLIC_PATH_RESERVED",
           "Public path is already reserved",
         );
       }
       publications.push(publication);
+      if (document.frontmatter.public.slug === undefined)
+        diagnostics.push(
+          errorDiagnostic(
+            "PUBLIC_SLUG_REQUIRED",
+            "Approval requires an explicit public slug",
+            document,
+          ),
+        );
     } catch (error) {
       if (error instanceof MarkdownError || error instanceof CompilerError)
         diagnostics.push(errorDiagnostic(error.code, error.message, document));
