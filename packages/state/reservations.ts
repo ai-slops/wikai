@@ -2,7 +2,7 @@ import type { ApprovedRevision, WorkingPublication } from "../model/index.ts";
 import { PublisherError } from "../model/index.ts";
 import type { StateDocument } from "./schema.ts";
 
-function normalizedSlug(slug: string): string {
+export function normalizedSlug(slug: string): string {
   return slug
     .normalize("NFC")
     .replace(/^\/+|\/+$/g, "")

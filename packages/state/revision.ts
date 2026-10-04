@@ -1,9 +1,33 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { z } from "zod";
 import { atomicWrite, hash, readOptional, safePath } from "../fs/index.ts";
 import type { ApprovedRevision, WorkingPublication } from "../model/index.ts";
 import { PublisherError } from "../model/index.ts";
 import { type StoredRevision, StoredRevisionSchema } from "./schema.ts";
+
+const RevisionIntegritySchema = z.looseObject({
+  publicId: z.string(),
+  revisionHash: z.string(),
+  exposureHash: z.string(),
+  metadata: z.looseObject({ id: z.string() }),
+  markdown: z.string(),
+  html: z.string(),
+  outgoingLinks: z.array(z.unknown()),
+  assets: z.array(z.unknown()),
+  approvedAt: z.string(),
+  integrityHash: z.string(),
+});
+
+type RevisionContentInput = {
+  readonly publicId: string;
+  readonly exposureHash: string;
+  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly markdown: string;
+  readonly html: string;
+  readonly outgoingLinks: readonly unknown[];
+  readonly assets: readonly unknown[];
+};
 
 function canonicalJson(value: unknown): string {
   const normalize = (input: unknown): unknown => {
@@ -21,7 +45,7 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(normalize(value)) ?? "null";
 }
 
-export function revisionContent(revision: ApprovedRevision): string {
+function canonicalRevisionContent(revision: RevisionContentInput): string {
   const {
     publishedAt: _publishedAt,
     updatedAt: _updatedAt,
@@ -38,6 +62,10 @@ export function revisionContent(revision: ApprovedRevision): string {
     outgoingLinks: revision.outgoingLinks,
     assets: revision.assets,
   });
+}
+
+export function revisionContent(revision: ApprovedRevision): string {
+  return canonicalRevisionContent(revision);
 }
 
 export function createRevision(
@@ -76,6 +104,14 @@ export async function readRevision(
   if (raw === undefined) {
     throw new PublisherError("REVISION_NOT_FOUND", "The requested approved revision was not found");
   }
+  return decodeRevision(raw, publicId, revisionHash);
+}
+
+export function decodeRevision(
+  raw: string,
+  publicId: string,
+  revisionHash: string,
+): StoredRevision {
   let decoded: unknown;
   try {
     decoded = JSON.parse(raw);
@@ -85,29 +121,33 @@ export async function readRevision(
     }
     throw error;
   }
-  const stored = StoredRevisionSchema.safeParse(decoded);
-  if (!stored.success) {
+  const integrityEnvelope = RevisionIntegritySchema.safeParse(decoded);
+  if (!integrityEnvelope.success) {
     throw new PublisherError("REVISION_INTEGRITY_FAILURE", "Approved revision data is invalid");
   }
   if (
-    stored.data.publicId !== publicId ||
-    stored.data.metadata.id !== publicId ||
-    stored.data.revisionHash !== revisionHash
+    integrityEnvelope.data.publicId !== publicId ||
+    integrityEnvelope.data.metadata.id !== publicId ||
+    integrityEnvelope.data.revisionHash !== revisionHash
   ) {
     throw new PublisherError(
       "REVISION_INTEGRITY_FAILURE",
       "Approved revision coordinates do not match its content",
     );
   }
-  const { integrityHash, ...revision } = stored.data;
+  const { integrityHash, ...revision } = integrityEnvelope.data;
   if (
     hash(canonicalJson(revision)) !== integrityHash ||
-    hash(revisionContent(revision)) !== revision.revisionHash
+    hash(canonicalRevisionContent(revision)) !== revision.revisionHash
   ) {
     throw new PublisherError(
       "REVISION_INTEGRITY_FAILURE",
       "Approved revision integrity check failed",
     );
+  }
+  const stored = StoredRevisionSchema.safeParse(integrityEnvelope.data);
+  if (!stored.success) {
+    throw new PublisherError("REVISION_INTEGRITY_FAILURE", "Approved revision data is invalid");
   }
   return stored.data;
 }

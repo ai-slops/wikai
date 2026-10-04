@@ -32,7 +32,48 @@ export const StoredRevisionSchema = RevisionSchema.extend({
 
 export type StoredRevision = z.infer<typeof StoredRevisionSchema>;
 
-export const PublicationStateSchema = z
+function validateHistory(
+  entry: {
+    readonly activeRevisionHash: string | null;
+    readonly lastDeployedRevision?: string | undefined;
+    readonly revisionHashes: readonly string[];
+    readonly revisionSourceHashes: object;
+    readonly revisionSources: object;
+  },
+  context: z.RefinementCtx,
+): void {
+  if (
+    entry.activeRevisionHash !== null &&
+    !entry.revisionHashes.includes(entry.activeRevisionHash)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["activeRevisionHash"],
+      message: "Active revision must belong to history",
+    });
+  }
+  if (
+    entry.lastDeployedRevision !== undefined &&
+    !entry.revisionHashes.includes(entry.lastDeployedRevision)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["lastDeployedRevision"],
+      message: "Last deployed revision must belong to history",
+    });
+  }
+  for (const revisionHash of entry.revisionHashes) {
+    if (!(revisionHash in entry.revisionSourceHashes) || !(revisionHash in entry.revisionSources)) {
+      context.addIssue({
+        code: "custom",
+        path: ["revisionHashes"],
+        message: "Revision metadata is incomplete",
+      });
+    }
+  }
+}
+
+export const LegacyPublicationStateSchema = z
   .object({
     sourceId: z.string(),
     sourcePath: z.string(),
@@ -48,36 +89,29 @@ export const PublicationStateSchema = z
     withdrawalFrom: InternalPathSchema.optional(),
     withdrawalRedirect: InternalPathSchema.optional(),
   })
-  .superRefine((entry, context) => {
-    if (
-      entry.activeRevisionHash !== null &&
-      !entry.revisionHashes.includes(entry.activeRevisionHash)
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["activeRevisionHash"],
-        message: "Active revision must belong to history",
-      });
-    }
-    for (const revisionHash of entry.revisionHashes) {
-      if (
-        !(revisionHash in entry.revisionSourceHashes) ||
-        !(revisionHash in entry.revisionSources)
-      ) {
-        context.addIssue({
-          code: "custom",
-          path: ["revisionHashes"],
-          message: "Revision metadata is incomplete",
-        });
-      }
-    }
-  });
+  .superRefine(validateHistory);
+
+export const PublicationStateSchema = z
+  .object({
+    ...LegacyPublicationStateSchema.shape,
+    activeSources: z.array(SourceSchema).nullable(),
+    revisionSourceHashes: z.record(StateHashSchema, StateHashSchema.nullable()),
+    revisionSources: z.record(StateHashSchema, z.array(SourceSchema).nullable()),
+    lastReviewedAt: z.iso.datetime().optional(),
+    lastDeployedRevision: StateHashSchema.optional(),
+  })
+  .superRefine(validateHistory);
 
 export type PublicationState = z.infer<typeof PublicationStateSchema>;
 export type SourceIdentity = Pick<PublicationState, "sourceId" | "sourcePath" | "sourceMode">;
 
-export const StateDocumentSchema = z.object({
+export const LegacyStateDocumentSchema = z.object({
   schemaVersion: z.literal(1),
+  publications: z.record(StatePublicIdSchema, LegacyPublicationStateSchema),
+});
+
+export const StateDocumentSchema = z.object({
+  schemaVersion: z.literal(2),
   publications: z.record(StatePublicIdSchema, PublicationStateSchema),
 });
 
