@@ -89,6 +89,26 @@ function reviewMetadata(metadata) {
   );
 }
 
+function sourceReviewSection(sources, sourceMode) {
+  if (sourceMode === "mirror") return "";
+  if (!sources?.length) {
+    return `<section class="review-section"><div class="section-heading"><div><span class="kicker">Projection sources</span><h2>Source re-extraction</h2></div></div><p class="muted">This publication has no tracked projection sources.</p></section>`;
+  }
+  const options = sources
+    .map((source, referenceIndex) => {
+      const selector = source.selection?.kind || source.anchor || "whole source";
+      return `<option value="${referenceIndex}" data-source-id="${escapeHtml(source.id)}">${escapeHtml(source.id)} · ${escapeHtml(selector)}</option>`;
+    })
+    .join("");
+  return `<section class="review-section" id="source-review-section"><div class="section-heading"><div><span class="kicker">Projection sources</span><h2>Review source update</h2></div></div>
+    <p class="muted">Compare the current projection with freshly selected source text. Loading never writes; applying uses only the merged Markdown you submit.</p>
+    <div class="source-review-controls"><label>Tracked source<select id="source-review-source">${options}</select></label><button class="button button--quiet" id="source-review-load" type="button">Load comparison</button></div>
+    <details><summary>Use a replacement selector</summary><p class="muted">Choose exactly one only when a changed line snapshot cannot be resolved safely.</p><div class="source-selector-fields"><label>Heading<input id="source-review-heading" autocomplete="off"></label><label>Block ID<input id="source-review-block" autocomplete="off"></label><label>Line range<input id="source-review-lines" inputmode="numeric" placeholder="14:32" pattern="\\d+:\\d+"></label></div></details>
+    <div class="tool-state" id="source-review-state" role="status" aria-live="polite">Select a source and load a read-only comparison.</div>
+    <div id="source-review-result" hidden><dl class="source-proof-grid" id="source-review-proof"></dl><div class="source-compare"><div><h3>Current projection</h3><pre class="source-pane" id="source-review-projection"></pre></div><div><h3>Selected source</h3><pre class="source-pane" id="source-review-current"></pre></div></div><div id="source-review-changes-wrap" hidden><h3>Selection changes</h3><pre class="source-pane" id="source-review-changes"></pre></div><label class="merge-field">Manual merged Markdown<textarea class="merge-editor" id="source-review-merge" rows="14" spellcheck="false"></textarea></label><div id="source-review-diagnostics"></div><div class="source-apply-row"><span class="muted">Applying updates the private projection only. Approval remains separate.</span><button class="button button--ink" id="source-review-apply" type="button" disabled>Apply reviewed merge</button></div></div>
+  </section>`;
+}
+
 function buildDiff(working, approved) {
   const sections = [
     [
@@ -125,6 +145,8 @@ function buildDiff(working, approved) {
 export function renderDetail(container, detail, row) {
   const working = detail.working;
   const approved = detail.approved;
+  const sourceReferences = working?.sources ?? detail.sourceReferences ?? [];
+  const sourceMode = working?.sourceMode ?? detail.sourceMode;
   const title = working?.metadata?.title || row?.title || row?.publicId || "Publication";
   const summary =
     working?.metadata?.summary ||
@@ -139,14 +161,19 @@ export function renderDetail(container, detail, row) {
     <p class="lede">${escapeHtml(summary)}</p>
   </header>
   ${detail.sourceDrift ? '<div class="diagnostic diagnostic--error"><strong>Source drift detected.</strong> Recompile before approving this revision.</div>' : ""}
-  <section class="review-section"><div class="section-heading"><div><span class="kicker">Publication record</span><h2>Public metadata</h2></div><button class="button button--quiet" id="metadata-button" type="button">Edit source metadata</button></div><dl class="metadata-grid">${metadataList(working)}</dl>${working?.sourcePath ? `<p class="local-source"><strong>Local source · private dashboard only</strong><code>${escapeHtml(working.sourcePath)}</code></p>` : ""}</section>
+  <section class="review-section"><div class="section-heading"><div><span class="kicker">Publication record</span><h2>Public metadata</h2></div><button class="button button--quiet" id="metadata-button" type="button" ${working ? "" : "disabled"}>Edit source metadata</button></div><dl class="metadata-grid">${metadataList(working)}</dl>${working?.sourcePath ? `<p class="local-source"><strong>Local source · private dashboard only</strong><code>${escapeHtml(working.sourcePath)}</code></p>` : ""}</section>
   <section class="review-section"><div class="section-heading"><div><span class="kicker">Review inventory</span><h2>Exposure summary</h2></div></div><dl class="metadata-grid exposure-grid">${exposureList(working, diagnostics)}</dl></section>
   <section class="review-section"><div class="section-heading"><div><span class="kicker">Bound revision</span><h2>Exposure proof</h2></div></div><dl class="hash-grid"><div><dt>Working exposure hash</dt><dd class="hash">${escapeHtml(exposureHash || "Unavailable")}</dd></div><div><dt>Approved exposure hash</dt><dd class="hash">${escapeHtml(approvedHash || "Not yet approved")}</dd></div></dl></section>
-  <section class="review-section"><div class="section-heading"><div><span class="kicker">Public surface</span><h2>Preview & four-part diff</h2></div></div>
+  ${
+    working || approved
+      ? `<section class="review-section"><div class="section-heading"><div><span class="kicker">Public surface</span><h2>Preview & four-part diff</h2></div></div>
     <div class="tab-strip" role="tablist" aria-label="Review mode"><button role="tab" id="preview-tab" aria-selected="true" aria-controls="preview-panel" tabindex="0">Working preview</button><button role="tab" id="approved-tab" aria-selected="false" aria-controls="preview-panel" tabindex="-1">Approved preview</button><button role="tab" id="diff-tab" aria-selected="false" aria-controls="diff-panel" tabindex="-1">Four-part diff</button></div>
     <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab"><iframe class="preview-frame" id="preview-frame" title="Sandboxed public working preview" sandbox></iframe></div>
     <pre class="diff-view" id="diff-panel" role="tabpanel" aria-labelledby="diff-tab" hidden>${escapeHtml(buildDiff(working, approved))}</pre>
-  </section>
+  </section>`
+      : ""
+  }
+  ${sourceReviewSection(sourceReferences, sourceMode)}
   <section class="review-section"><div class="section-heading"><div><span class="kicker">Compiler report</span><h2>Diagnostics</h2></div></div>${diagnosticList(diagnostics)}</section>
   <section class="review-section"><div class="section-heading"><div><span class="kicker">Revision ledger</span><h2>History</h2></div></div>${detail.history?.length ? `<ol>${detail.history.map((item) => `<li><button class="button button--quiet restore-button" data-revision-hash="${escapeHtml(item.revisionHash)}">Restore ${escapeHtml(item.revisionHash.slice(0, 12))}</button> <span class="muted">${escapeHtml(item.approvedAt || "")}</span></li>`).join("")}</ol>` : '<p class="muted">No earlier approved revisions.</p>'}</section>`;
 }

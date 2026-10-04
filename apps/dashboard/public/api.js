@@ -1,5 +1,13 @@
 let csrfToken = "";
 
+export class ApiError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+  }
+}
+
 async function request(path, options = {}) {
   const headers = new Headers(options.headers);
   headers.set("accept", "application/json");
@@ -9,7 +17,7 @@ async function request(path, options = {}) {
   const payload = await response.json();
   if (!response.ok) {
     const message = payload?.error?.message ?? `Request failed (${response.status})`;
-    throw new Error(message);
+    throw new ApiError(payload?.error?.code ?? "REQUEST_FAILED", message);
   }
   return payload;
 }
@@ -45,5 +53,15 @@ export const api = {
     request(`/publications/${encodeURIComponent(id)}/restore`, {
       method: "POST",
       body: JSON.stringify({ revisionHash, expectedHash }),
+    }),
+  inspectAsset: (path) => request(`/assets/inspect?path=${encodeURIComponent(path)}`),
+  sourceUpdate: (id, input) => {
+    const query = new URLSearchParams(input);
+    return request(`/publications/${encodeURIComponent(id)}/source-update?${query}`);
+  },
+  applySourceUpdate: (id, input) =>
+    request(`/publications/${encodeURIComponent(id)}/source-update`, {
+      method: "POST",
+      body: JSON.stringify(input),
     }),
 };

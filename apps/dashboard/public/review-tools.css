@@ -1,0 +1,120 @@
+.tool-state {
+  border-inline-start: 3px solid var(--color-accent);
+  color: var(--color-ink-muted);
+  font-size: var(--text-small);
+  padding: var(--space-3) var(--space-4);
+}
+.tool-state[data-state="error"],
+.tool-state[data-state="stale"] {
+  background: var(--color-danger-wash);
+  border-color: var(--color-danger);
+  color: var(--color-ink);
+}
+.tool-state[data-state="warning"] {
+  background: var(--color-warning-wash);
+  border-color: var(--color-warning);
+  color: var(--color-ink);
+}
+.inspection-dialog {
+  inline-size: min(var(--measure-dialog-wide), calc(100% - var(--space-8)));
+}
+.inspection-summary,
+.source-proof-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+}
+.inspection-summary div,
+.source-proof-grid div {
+  border-block-start: 1px solid var(--color-rule);
+  min-inline-size: 0;
+  padding-block-start: var(--space-2);
+}
+.inspection-references,
+.inspection-notes {
+  border-block-start: 1px solid var(--color-rule);
+  margin-block-start: var(--space-5);
+  padding-block-start: var(--space-4);
+}
+.raw-report,
+.source-pane,
+.merge-editor {
+  background: var(--color-paper-strong);
+  border: 1px solid var(--color-rule);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  inline-size: 100%;
+  max-block-size: var(--measure-tool-pane);
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: var(--space-4);
+  white-space: pre-wrap;
+}
+.raw-report {
+  margin-block: var(--space-5) 0;
+}
+.source-review-controls,
+.source-selector-fields,
+.source-compare {
+  display: grid;
+  gap: var(--space-4);
+}
+.source-review-controls {
+  align-items: end;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.source-review-controls label,
+.source-selector-fields label,
+.merge-field {
+  display: grid;
+  font-size: var(--text-small);
+  font-weight: 650;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+.source-review-controls select,
+.source-selector-fields input,
+.merge-editor {
+  border: 1px solid var(--color-rule-strong);
+  border-radius: var(--radius-control);
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: 2.75rem;
+  min-inline-size: 0;
+  padding-inline: var(--space-3);
+}
+.source-review-controls + details summary {
+  align-items: center;
+  display: flex;
+  min-block-size: 2.75rem;
+}
+.source-selector-fields {
+  grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
+}
+.source-compare {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-block: var(--space-5);
+}
+.source-compare h3 {
+  margin-block-end: var(--space-2);
+}
+.source-apply-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  justify-content: space-between;
+  margin-block-start: var(--space-4);
+}
+@media (max-width: 47.99rem) {
+  #source-review-section {
+    scroll-margin-block-start: calc(var(--space-16) + var(--space-4));
+  }
+  .source-review-controls,
+  .source-compare {
+    grid-template-columns: 1fr;
+  }
+  .inspection-dialog {
+    inline-size: calc(100% - var(--space-4));
+  }
+}

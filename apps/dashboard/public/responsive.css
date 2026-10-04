@@ -67,6 +67,9 @@
   .masthead-actions .button--quiet {
     display: none;
   }
+  #inspect-button {
+    display: inline-flex;
+  }
   .masthead-actions .button {
     min-block-size: 2.75rem;
     padding-inline: var(--space-3);

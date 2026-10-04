@@ -6,10 +6,12 @@
     <meta name="description" content="Review and publish selected notes from a private vault.">
     <meta name="color-scheme" content="light">
     <title>Wikai / Publication studio</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/tokens.css">
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/queue.css">
     <link rel="stylesheet" href="/review.css">
+    <link rel="stylesheet" href="/review-tools.css">
     <link rel="stylesheet" href="/responsive.css">
   </head>
   <body>
@@ -22,6 +24,7 @@
         </div>
         <div class="masthead-actions">
           <span class="connection" id="connection"><i></i> Local</span>
+          <button class="button button--quiet" id="inspect-button" type="button">Inspect</button>
           <button class="button button--quiet" id="new-button" type="button">New candidate</button>
           <button class="button button--ink" id="build-button" type="button">Build release</button>
         </div>
@@ -88,6 +91,16 @@
         <fieldset class="visibility-fields"><legend>Visibility</legend><label><input name="listed" type="checkbox"> Show in listings</label><label><input name="index" type="checkbox"> Allow search indexing</label><label><input name="feed" type="checkbox"> Include in feeds</label></fieldset>
         <p class="form-note">Saving edits the private source with an exact source-hash check. Approval is still a separate action.</p>
         <footer><button class="button button--quiet" value="cancel" type="submit">Cancel</button><button class="button button--ink" value="save" type="submit">Save metadata</button></footer>
+      </form>
+    </dialog>
+    <dialog id="inspection-dialog" class="inspection-dialog" aria-labelledby="inspection-title">
+      <form id="inspection-form">
+        <header><div><span class="kicker">Private read-only tool</span><h2 id="inspection-title">Inspect attachment</h2></div><button class="icon-button" id="inspection-close" aria-label="Close dialog" type="button">×</button></header>
+        <label>Vault-relative path<input name="path" required maxlength="4096" placeholder="public-assets/report.pdf" autocomplete="off"></label>
+        <p class="form-note">Inspection reads metadata only. It never marks a hash reviewed or approves an asset.</p>
+        <div class="tool-state" id="inspection-state" role="status" aria-live="polite">Enter a PDF or archive path inside the vault.</div>
+        <section id="inspection-report" hidden aria-label="Attachment inspection report"></section>
+        <footer><button class="button button--quiet" id="inspection-cancel" type="button">Close</button><button class="button button--ink" id="inspection-submit" type="submit">Inspect metadata</button></footer>
       </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

@@ -25,8 +25,8 @@
   font-family: var(--font-display);
   font-size: var(--text-h3);
   justify-content: center;
-  min-block-size: 2.5rem;
-  min-inline-size: 2.5rem;
+  min-block-size: 2.75rem;
+  min-inline-size: 2.75rem;
 }
 .identity {
   align-items: baseline;

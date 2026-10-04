@@ -62,6 +62,8 @@ All authored spacing uses the 4px base: `--space-1: 0.25rem`, `--space-2: 0.5rem
 
 The desktop shell is a bounded `100dvh` grid with 20rem queue, fluid review, and 18rem context rail. The header is fixed in its grid row; queue, review, and rail independently scroll only when visible together. At 1024px the rail joins the review flow. Below 768px the queue becomes a full-width first view and the selected review replaces it with an explicit Back to queue control. Main prose measure is 72ch; app max inline size is 1600px. Gutters are `--space-4` mobile, `--space-6` tablet, and `--space-8` desktop.
 
+Review-tool measures are `--measure-dialog-wide: 54rem` for complete private reports and `--measure-tool-pane: 24rem` for bounded raw metadata/source panes.
+
 ## 5. Components
 
 ### Button
@@ -110,6 +112,18 @@ The desktop shell is a bounded `100dvh` grid with 20rem queue, fluid review, and
 - **Structure**: kicker, clear sentence, optional recovery action.
 - **Variants**: queue empty, no filter results, no approved revision, request error.
 - **Accessibility**: loading uses `aria-busy`; errors use `role=status` unless urgent.
+
+### Inspection report
+- **Structure**: vault-relative path field, explicit Inspect action, compact review-state summary, reference inventory, and a complete raw metadata `pre`.
+- **Variants**: ready, loading, complete, incomplete reference inventory, unsupported or failed inspection.
+- **Safety**: report values and XMP/media metadata are inserted as text only. Inspection never marks a hash reviewed and offers no approval action.
+- **Layout**: summary uses the intrinsic metadata grid; unbroken hashes and raw metadata wrap without forcing page-level horizontal scroll.
+
+### Source merge workbench
+- **Structure**: explicit indexed source-reference selector, optional replacement selector controls, current projection and selected source panes, textual selection-change report, editable merged Markdown, diagnostics, and one Apply merge action.
+- **Variants**: idle, loading, resolvable, selector-required, stale, apply-error, applied.
+- **Safety**: source content is always shown as text. Loading a review never writes; applying requires the current projection hash and the operator-edited merged body. It never triggers approval.
+- **Layout**: comparison panes use an overflow-safe two-column grid and collapse to one column below the existing mobile breakpoint.
 
 ## 6. Motion & Interaction
 

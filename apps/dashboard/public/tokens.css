@@ -41,6 +41,8 @@
   --space-16: 4rem;
   --radius-control: 0.25rem;
   --radius-panel: 0.5rem;
+  --measure-dialog-wide: 54rem;
+  --measure-tool-pane: 24rem;
   --motion-micro: 120ms;
   --motion-standard: 200ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);

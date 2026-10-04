@@ -1,4 +1,5 @@
 import { api, initializeSession } from "/api.js";
+import { initializeAssetInspection } from "/asset-inspection.js";
 import {
   initializeReviewTabKeyboard,
   initializeSearchShortcut,
@@ -6,6 +7,7 @@ import {
 } from "/interactions.js";
 import { initializeMetadataEditor } from "/metadata.js";
 import { createPreviewLoader } from "/preview-loader.js";
+import { initializeReleaseBuild } from "/release.js";
 import {
   renderDetail,
   renderDiagnosticRail,
@@ -13,6 +15,7 @@ import {
   renderSummary,
   renderUnavailableDetail,
 } from "/render.js";
+import { initializeSourceReview } from "/source-review.js";
 import { initializeWorkflow } from "/workflow.js";
 
 const elements = {
@@ -36,6 +39,7 @@ const elements = {
   build: document.querySelector("#build-button"),
   queueToggle: document.querySelector("#queue-toggle"),
   newButton: document.querySelector("#new-button"),
+  inspectButton: document.querySelector("#inspect-button"),
 };
 
 const state = {
@@ -111,9 +115,9 @@ async function selectPublication(publicId) {
     renderDetail(elements.detail, detail, row);
     renderDiagnosticRail(
       elements.diagnosticRail,
-      detail.working?.diagnostics || row?.diagnostics || [],
+      detail.working?.diagnostics || detail.diagnostics || row?.diagnostics || [],
     );
-    await loadPreview("working");
+    if (detail.working) await loadPreview("working");
     if (version !== selectionVersion) return;
     elements.shell.dataset.mobileView = "detail";
     elements.queueToggle.setAttribute("aria-expanded", "false");
@@ -179,21 +183,6 @@ async function confirmAction(event) {
   }
 }
 
-async function buildRelease() {
-  elements.build.disabled = true;
-  elements.build.textContent = "Building…";
-  try {
-    await api.build();
-    toast("Release build completed.");
-    await loadStatus();
-  } catch (error) {
-    toast(error.message, true);
-  } finally {
-    elements.build.disabled = false;
-    elements.build.textContent = "Build release";
-  }
-}
-
 async function handleDetailClick(event) {
   const button = event.target.closest("button");
   if (!button) return;
@@ -228,7 +217,7 @@ elements.kind.addEventListener("change", refreshQueue);
 elements.detail.addEventListener("click", handleDetailClick);
 elements.confirm.addEventListener("close", confirmAction);
 elements.newButton.addEventListener("click", () => workflowEditor.open());
-elements.build.addEventListener("click", buildRelease);
+elements.inspectButton.addEventListener("click", () => assetInspection.open());
 elements.queueToggle.addEventListener("click", showQueue);
 initializeSearchShortcut(showQueue);
 initializeReviewTabKeyboard(loadPreview);
@@ -244,6 +233,19 @@ const metadataEditor = initializeMetadataEditor({
 const workflowEditor = initializeWorkflow({
   onCreated: loadStatus,
   notify: toast,
+});
+const assetInspection = initializeAssetInspection({ notify: toast });
+initializeReleaseBuild({ button: elements.build, notify: toast, onBuilt: loadStatus });
+initializeSourceReview({
+  selection: () => ({ id: state.selectedId, version: selectionVersion }),
+  isCurrent: (selection) =>
+    selection.id === state.selectedId && selection.version === selectionVersion,
+  notify: toast,
+  onApplied: async () => {
+    const publicId = state.selectedId;
+    await loadStatus();
+    await selectPublication(publicId);
+  },
 });
 try {
   await initializeSession();
