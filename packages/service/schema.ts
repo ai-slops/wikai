@@ -6,6 +6,7 @@ import {
   LogSchema,
   PageSchema,
   RevisionSchema,
+  SourceSchema,
   WorkingSchema,
   WorkSchema,
 } from "../model/index.ts";
@@ -103,5 +104,7 @@ export const DetailSchema = z.object({
   history: z.array(RevisionSchema),
   sourceDrift: z.boolean(),
   diagnostics: z.array(DiagnosticSchema),
+  sourceReferences: z.array(SourceSchema).optional(),
+  sourceMode: z.enum(["mirror", "projection"]).optional(),
 });
 export type PublicationDetail = z.infer<typeof DetailSchema>;

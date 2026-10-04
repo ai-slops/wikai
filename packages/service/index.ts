@@ -11,8 +11,10 @@ import { PublisherError } from "../model/index.ts";
 import { buildReleaseStaging, buildSite } from "../release/index.ts";
 import { PublisherState } from "../state/index.ts";
 import { assertExplicitSlug, captureApproval } from "./approval.ts";
+import { inspectAsset } from "./assets.ts";
 import { hasSourceDrift } from "./drift.ts";
 import { createExtraction, createProject } from "./projection.ts";
+import { reviewAgeDiagnostics } from "./review-policy.ts";
 import {
   type CandidateInput,
   CandidateInputSchema,
@@ -27,6 +29,8 @@ import {
   type PublisherStatus,
 } from "./schema.ts";
 import { markCandidate, patchMetadata } from "./source.ts";
+import { applySourceUpdate, planSourceUpdate } from "./source-update.ts";
+import type { SourceUpdateApply, SourceUpdateInput } from "./source-update-schema.ts";
 import { createStatus } from "./status.ts";
 
 export type PublisherPlan = PublicationPlan & {
@@ -56,7 +60,17 @@ export class Publisher {
     const snapshot = await this.state.snapshot();
     const vault = await loadVault(this.config);
     const plan = await compile(vault, this.config, snapshot.approved);
-    return { ...plan, approved: snapshot.approved, redirects: snapshot.redirects };
+    const reviewDiagnostics = reviewAgeDiagnostics({
+      approved: snapshot.approved,
+      config: this.config,
+      reviewedAt: await this.state.reviewTimes(),
+    });
+    return {
+      ...plan,
+      diagnostics: [...plan.diagnostics, ...reviewDiagnostics],
+      approved: snapshot.approved,
+      redirects: snapshot.redirects,
+    };
   }
 
   async status(): Promise<PublisherStatus> {
@@ -77,7 +91,18 @@ export class Publisher {
     if (working === null && approved === null && history.length === 0 && diagnostics.length === 0) {
       throw new PublisherError("PUBLICATION_NOT_FOUND", "The publication was not found");
     }
-    return DetailSchema.parse({ working, approved, history, sourceDrift, diagnostics });
+    const authored = vault.documents.find(
+      (document) => document.frontmatter.public?.id === publicId,
+    )?.frontmatter.public;
+    return DetailSchema.parse({
+      working,
+      approved,
+      history,
+      sourceDrift,
+      diagnostics,
+      sourceReferences: authored?.sources ?? [],
+      ...(authored === undefined ? {} : { sourceMode: authored.mode }),
+    });
   }
 
   async approve(publicId: string, expectedHash: string): Promise<ApprovedRevision> {
@@ -193,6 +218,24 @@ export class Publisher {
 
   async audit(path: string): ReturnType<typeof auditDist> {
     return auditDist(path, this.config, await loadVault(this.config));
+  }
+
+  async inspectAsset(path: string): ReturnType<typeof inspectAsset> {
+    return inspectAsset(path, this.config);
+  }
+
+  async sourceUpdate(
+    publicId: string,
+    input: SourceUpdateInput,
+  ): ReturnType<typeof planSourceUpdate> {
+    return planSourceUpdate(this.config, publicId, input);
+  }
+
+  async applySourceUpdate(
+    publicId: string,
+    input: SourceUpdateApply,
+  ): ReturnType<typeof applySourceUpdate> {
+    return applySourceUpdate(this.config, publicId, input);
   }
 
   async restore(
