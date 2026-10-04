@@ -2,17 +2,13 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { parseDocument } from "yaml";
 import { atomicWrite, hash, safePath } from "../fs/index.ts";
+import { type MarkdownSource, splitMarkdownSource } from "../markdown/frontmatter.ts";
 import type { PublicKind, PublisherConfig } from "../model/index.ts";
 import { PublisherError } from "../model/index.ts";
 import type { CandidateInput, MetadataPatch } from "./schema.ts";
 
-export type SourceParts = { readonly frontmatter: string; readonly body: string };
-
-export function splitSource(raw: string): SourceParts {
-  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/u.exec(raw);
-  if (match === null) return { frontmatter: "", body: raw };
-  return { frontmatter: match[1] ?? "", body: raw.slice(match[0].length) };
-}
+export type SourceParts = MarkdownSource;
+export const splitSource = splitMarkdownSource;
 
 export function newPublicId(): string {
   return `pub_${randomUUID().replaceAll("-", "")}`;
@@ -61,6 +57,15 @@ export function parsedFrontmatter(parts: SourceParts) {
   return document;
 }
 
+export function serializeSource(
+  parts: SourceParts,
+  document: ReturnType<typeof parsedFrontmatter>,
+): string {
+  const yaml = document.toString().replace(/\r?\n/gu, parts.newline);
+  const separator = parts.body !== "" || parts.finalNewline ? parts.newline : "";
+  return `${parts.bom ? "\ufeff" : ""}---${parts.newline}${yaml}---${separator}${parts.body}`;
+}
+
 export function assertExpected(raw: string, expectedHash: string | undefined): void {
   if (expectedHash !== undefined && hash(raw) !== expectedHash) {
     throw new PublisherError(
@@ -92,7 +97,7 @@ function candidateContent(
       typeof title === "string" ? title : (input.path.split("/").at(-1) ?? "untitled");
     document.setIn(["public", "slug"], temporarySlug(input.kind, fallback.replace(/\.md$/iu, "")));
   }
-  return { text: `---\n${document.toString()}---\n${parts.body}`, id };
+  return { text: serializeSource(parts, document), id };
 }
 
 export async function markCandidate(config: PublisherConfig, input: CandidateInput) {
@@ -115,7 +120,7 @@ export async function markPublished(
   const parts = splitSource(raw);
   const document = parsedFrontmatter(parts);
   document.setIn(["public", "status"], "published");
-  const content = `---\n${document.toString()}---\n${parts.body}`;
+  const content = serializeSource(parts, document);
   await atomicWrite(path, content, expectedHash);
   return hash(content);
 }
@@ -136,7 +141,7 @@ export async function patchMetadata(
     throw new PublisherError("PUBLICATION_NOT_FOUND", "The publication was not found");
   }
   for (const [key, value] of Object.entries(patch)) document.setIn(["public", key], value);
-  const content = `---\n${document.toString()}---\n${parts.body}`;
+  const content = serializeSource(parts, document);
   await atomicWrite(path, content, expectedHash);
   return { publicId, path: pathInput, previousHash: expectedHash, sourceHash: hash(content) };
 }

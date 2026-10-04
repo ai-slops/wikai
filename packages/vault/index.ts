@@ -9,15 +9,16 @@ import { unified } from "unified";
 import { visit } from "unist-util-visit";
 import { parseDocument } from "yaml";
 import { hash } from "../fs/index.ts";
+import { splitMarkdownSource } from "../markdown/frontmatter.ts";
 import {
   type Diagnostic,
   FrontmatterSchema,
   type PrivateDocument,
   type PublisherConfig,
+  PublisherError,
   type VaultSnapshot,
 } from "../model/index.ts";
 
-type ParsedSource = { readonly frontmatterText: string; readonly body: string };
 const PUBLIC_KEY_VARIANTS = new Set([
   "publish",
   "published",
@@ -41,18 +42,6 @@ const diagnostic = (code: string, message: string, sourcePath: string): Diagnost
   message,
   sourcePath,
 });
-
-const splitFrontmatter = (raw: string): ParsedSource => {
-  const lines = raw.split("\n");
-  if (lines[0]?.trim() !== "---") return { frontmatterText: "{}", body: raw };
-  const closing = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
-  if (closing < 0)
-    throw new VaultError("FRONTMATTER_UNTERMINATED", "Markdown frontmatter is not closed");
-  return {
-    frontmatterText: lines.slice(1, closing).join("\n"),
-    body: lines.slice(closing + 1).join("\n"),
-  };
-};
 
 const discover = async (
   root: string,
@@ -84,11 +73,11 @@ const discover = async (
 };
 
 const parseSource = (raw: string, sourcePath: string): PrivateDocument => {
-  const { frontmatterText, body } = splitFrontmatter(raw);
-  const yaml = parseDocument(frontmatterText, { uniqueKeys: true });
+  const { frontmatter, body } = splitMarkdownSource(raw);
+  const yaml = parseDocument(frontmatter || "{}", { uniqueKeys: true });
   if (yaml.errors.length > 0)
     throw new VaultError("FRONTMATTER_INVALID", "Markdown frontmatter is invalid");
-  const parsed = FrontmatterSchema.safeParse(yaml.toJS());
+  const parsed = FrontmatterSchema.safeParse(yaml.toJS({ maxAliasCount: 20 }));
   if (!parsed.success)
     throw new VaultError("FRONTMATTER_INVALID", "Markdown frontmatter is invalid");
   if (
@@ -123,7 +112,7 @@ export const loadVault = async (config: PublisherConfig): Promise<VaultSnapshot>
     try {
       documents.push(parseSource(raw, sourcePath));
     } catch (error) {
-      if (error instanceof VaultError)
+      if (error instanceof VaultError || error instanceof PublisherError)
         diagnostics.push(diagnostic(error.code, error.message, sourcePath));
       else if (error instanceof Error)
         diagnostics.push(

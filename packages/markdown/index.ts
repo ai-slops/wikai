@@ -1,16 +1,5 @@
-import { extname, posix } from "node:path";
 import GithubSlugger from "github-slugger";
-import type {
-  Definition,
-  Heading,
-  Image,
-  ImageReference,
-  Link,
-  LinkReference,
-  Parent,
-  Root,
-  Text,
-} from "mdast";
+import type { Heading, Image, Link, Parent, Root, Text } from "mdast";
 import { toString as mdastToString } from "mdast-util-to-string";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
@@ -22,6 +11,7 @@ import { unified } from "unified";
 import { visit } from "unist-util-visit";
 import { AssetError, materializeAsset } from "../assets/index.ts";
 import type { MaterializedAsset, PublicLink, PublisherConfig } from "../model/index.ts";
+import { isAssetReference } from "./asset-references.ts";
 import {
   type LinkContext,
   type LinkTarget,
@@ -32,6 +22,7 @@ import {
   transformWikiLinks,
   type VaultLinkTarget,
 } from "./link-resolver.ts";
+import { expandReferences, removePositions } from "./references.ts";
 
 export type { LinkTarget, VaultLinkTarget } from "./link-resolver.ts";
 export { MarkdownError } from "./link-resolver.ts";
@@ -54,18 +45,6 @@ export type MarkdownInput = {
 
 const isExternal = (url: string): boolean => /^(?:https?:|mailto:)/iu.test(url);
 
-const isPotentialAsset = (
-  reference: string,
-  sourcePath: string,
-  roots: readonly string[],
-): boolean => {
-  const candidate = posix.normalize(posix.join(posix.dirname(sourcePath), reference));
-  return roots.some((root) => {
-    const normalized = root.replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/$/, "");
-    return candidate === normalized || candidate.startsWith(`${normalized}/`);
-  });
-};
-
 const materialize = async (
   url: string,
   sourcePath: string,
@@ -76,14 +55,6 @@ const materialize = async (
   } catch (error) {
     if (error instanceof AssetError) throw new MarkdownError(error.code, error.message);
     throw error;
-  }
-};
-
-const removePositions = (positions: ReadonlyMap<Parent, readonly number[]>): void => {
-  for (const [parent, indexes] of positions) {
-    for (const index of [...indexes].sort((left, right) => right - left)) {
-      parent.children.splice(index, 1);
-    }
   }
 };
 
@@ -116,57 +87,6 @@ const validateStructure = (tree: Root): void => {
   visit(tree, "heading", (node: Heading) => {
     node.data = { hProperties: { id: slugger.slug(mdastToString(node)) } };
   });
-};
-
-const expandReferences = (tree: Root): void => {
-  const definitions = new Map<string, Definition>();
-  visit(tree, "definition", (node: Definition) => {
-    const key = node.identifier.toLocaleLowerCase("en-US");
-    if (definitions.has(key))
-      throw new MarkdownError(
-        "AMBIGUOUS_MARKDOWN_REFERENCE",
-        "Markdown reference identifier is ambiguous",
-      );
-    definitions.set(key, node);
-  });
-  visit(tree, "linkReference", (node: LinkReference, index, parent: Parent | undefined) => {
-    if (index === undefined || !parent) return;
-    const definition = definitions.get(node.identifier.toLocaleLowerCase("en-US"));
-    if (!definition)
-      throw new MarkdownError(
-        "UNRESOLVED_MARKDOWN_REFERENCE",
-        "Markdown link reference is unresolved",
-      );
-    parent.children.splice(index, 1, {
-      type: "link",
-      url: definition.url,
-      ...(definition.title ? { title: definition.title } : {}),
-      children: node.children,
-    });
-  });
-  visit(tree, "imageReference", (node: ImageReference, index, parent: Parent | undefined) => {
-    if (index === undefined || !parent) return;
-    const definition = definitions.get(node.identifier.toLocaleLowerCase("en-US"));
-    if (!definition)
-      throw new MarkdownError(
-        "UNRESOLVED_MARKDOWN_REFERENCE",
-        "Markdown image reference is unresolved",
-      );
-    parent.children.splice(index, 1, {
-      type: "image",
-      url: definition.url,
-      alt: node.alt,
-      ...(definition.title ? { title: definition.title } : {}),
-    });
-  });
-  const positions = new Map<Parent, number[]>();
-  visit(tree, "definition", (_node, index, parent: Parent | undefined) => {
-    if (index === undefined || !parent) return;
-    const indexes = positions.get(parent) ?? [];
-    indexes.push(index);
-    positions.set(parent, indexes);
-  });
-  removePositions(positions);
 };
 
 const transformImages = async (tree: Root, state: TransformState): Promise<void> => {
@@ -202,13 +122,7 @@ const transformLinks = async (tree: Root, state: TransformState): Promise<void> 
       continue;
     }
     const { reference, anchor } = splitReference(link.url);
-    const extension = extname(reference).toLowerCase();
-    if (
-      !reference.startsWith("/") &&
-      ((extension && extension !== ".md") ||
-        (!extension &&
-          isPotentialAsset(reference, state.context.sourcePath, state.config.assets.roots)))
-    ) {
+    if (isAssetReference(reference, state.context.sourcePath, state.config.assets.roots)) {
       const asset = await materialize(reference, state.context.sourcePath, state.config);
       state.assets.push(asset);
       link.url = asset.publicPath;
