@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   type FileHandle,
+  link,
   lstat,
   mkdir,
   open,
@@ -21,8 +22,12 @@ export function isFsError(error: unknown, code: string): boolean {
 }
 
 export async function readOptional(path: string): Promise<string | undefined> {
+  return (await readOptionalBytes(path))?.toString("utf8");
+}
+
+export async function readOptionalBytes(path: string): Promise<Buffer | undefined> {
   try {
-    return await readFile(path, "utf8");
+    return await readFile(path);
   } catch (error) {
     if (isFsError(error, "ENOENT")) return undefined;
     throw error;
@@ -65,7 +70,7 @@ export async function safePath(root: string, input: string): Promise<string> {
 export async function atomicWrite(
   path: string,
   content: string | Buffer,
-  expectedHash?: string,
+  expectedHash?: string | null,
 ): Promise<void> {
   const destination = resolve(path);
   await safePath(parse(destination).root, destination);
@@ -73,8 +78,8 @@ export async function atomicWrite(
   await safePath(dirname(destination), destination);
   const check = async () => {
     if (expectedHash === undefined) return;
-    const current = await readOptional(destination);
-    if (current === undefined || hash(current) !== expectedHash) {
+    const current = await readOptionalBytes(destination);
+    if ((current === undefined ? null : hash(current)) !== expectedHash) {
       throw new PublisherError(
         "CONCURRENT_SOURCE_MODIFICATION",
         "The source changed; review it again before saving.",
@@ -88,7 +93,21 @@ export async function atomicWrite(
     await handle.writeFile(content);
     await handle.sync();
     await check();
-    await rename(temp, destination);
+    if (expectedHash === null) {
+      try {
+        await link(temp, destination);
+      } catch (error) {
+        if (isFsError(error, "EEXIST")) {
+          throw new PublisherError(
+            "CONCURRENT_SOURCE_MODIFICATION",
+            "The destination was created concurrently.",
+          );
+        }
+        throw error;
+      }
+    } else {
+      await rename(temp, destination);
+    }
     const directory = await open(dirname(destination), "r");
     try {
       await directory.sync();

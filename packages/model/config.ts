@@ -1,9 +1,18 @@
 import { z } from "zod";
 
-const VisibilitySchema = z.object({ listed: z.boolean(), index: z.boolean(), feed: z.boolean() });
-export const ConfigSchema = z.object({
+const VisibilitySchema = z.strictObject({
+  listed: z.boolean(),
+  index: z.boolean(),
+  feed: z.boolean(),
+});
+const DeploymentNameSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/u);
+const DirectoryDeploymentSchema = z.strictObject({
+  type: z.literal("directory"),
+  root: z.string().min(1),
+});
+export const ConfigSchema = z.strictObject({
   schemaVersion: z.literal(1).default(1),
-  vault: z.object({
+  vault: z.strictObject({
     root: z.string(),
     include: z.array(z.string()).default(["**/*.md"]),
     exclude: z
@@ -17,17 +26,17 @@ export const ConfigSchema = z.object({
         "generated/**",
       ]),
   }),
-  publisher: z.object({
+  publisher: z.strictObject({
     stateDir: z.string(),
     previewStagingDir: z.string(),
     releaseStagingDir: z.string(),
     cleanBuild: z.literal(true).default(true),
   }),
   publicViews: z
-    .object({ roots: z.array(z.string()).default(["public-views"]) })
+    .strictObject({ roots: z.array(z.string()).default(["public-views"]) })
     .default({ roots: ["public-views"] }),
   assets: z
-    .object({
+    .strictObject({
       roots: z.array(z.string()).default(["assets", "public-assets"]),
       maxFileBytes: z.number().positive().default(52428800),
       rejectSymlinks: z.literal(true).default(true),
@@ -42,17 +51,33 @@ export const ConfigSchema = z.object({
       reviewedHashes: [],
     }),
   security: z
-    .object({
+    .strictObject({
       denyPatterns: z.array(z.string()).default(["PRIVATE_SENTINEL_[A-Z0-9_]+"]),
       scanPrivateIdsInDist: z.literal(true).default(true),
       scanPrivatePathsInDist: z.literal(true).default(true),
+      warnPrivateTitles: z.boolean().optional(),
+      scanPii: z.boolean().optional(),
+      scanHighEntropy: z.boolean().optional(),
     })
     .default({
       denyPatterns: ["PRIVATE_SENTINEL_[A-Z0-9_]+"],
       scanPrivateIdsInDist: true,
       scanPrivatePathsInDist: true,
     }),
-  site: z.object({
+  review: z
+    .strictObject({
+      warnAfterDays: z
+        .strictObject({
+          work: z.number().int().nonnegative().optional(),
+          knowledge: z.number().int().nonnegative().optional(),
+          log: z.number().int().nonnegative().optional(),
+          page: z.number().int().nonnegative().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+  deployments: z.record(DeploymentNameSchema, DirectoryDeploymentSchema).optional(),
+  site: z.strictObject({
     sourceDir: z.string(),
     distDir: z.string(),
     url: z.url().default("https://example.invalid"),
@@ -61,7 +86,7 @@ export const ConfigSchema = z.object({
     image: z.string().default("wikai-site:local"),
   }),
   defaults: z
-    .object({
+    .strictObject({
       work: VisibilitySchema.default({ listed: true, index: true, feed: true }),
       knowledge: VisibilitySchema.default({ listed: true, index: true, feed: true }),
       log: VisibilitySchema.default({ listed: true, index: false, feed: true }),

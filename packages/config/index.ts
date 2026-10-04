@@ -41,6 +41,16 @@ export async function loadConfig(
       sourceDir: resolve(base, input.site.sourceDir),
       distDir: resolve(base, input.site.distDir),
     },
+    ...(input.deployments === undefined
+      ? {}
+      : {
+          deployments: Object.fromEntries(
+            Object.entries(input.deployments).map(([name, deployment]) => [
+              name,
+              { ...deployment, root: resolve(base, deployment.root) },
+            ]),
+          ),
+        }),
   };
   await safePath(config.vault.root, ".");
   for (const path of [

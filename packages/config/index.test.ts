@@ -33,6 +33,28 @@ it("resolves relative paths against the configuration location", async () => {
   expect(config.defaults.log.index).toBe(false);
 });
 
+it("resolves relative deployment roots against the configuration location", async () => {
+  // Given a named deployment with a relative destination.
+  const path = join(root, "config.yaml");
+  await writeFile(
+    path,
+    stringify({
+      vault: { root: "vault" },
+      publisher: {
+        stateDir: "vault/.publisher",
+        previewStagingDir: "preview",
+        releaseStagingDir: "release",
+      },
+      deployments: { production: { type: "directory", root: "deployed" } },
+      site: { sourceDir: "site", distDir: "dist" },
+    }),
+  );
+
+  // When loaded, then deployment paths use the config directory rather than process cwd.
+  const config = await loadConfig(path);
+  expect(Object.values(config.deployments ?? {})[0]?.root).toBe(join(root, "deployed"));
+});
+
 it("rejects a public output nested inside the vault", async () => {
   const path = join(root, "config.yaml");
   await writeFile(

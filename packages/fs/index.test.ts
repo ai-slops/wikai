@@ -13,6 +13,30 @@ afterEach(async () => {
 });
 
 describe("filesystem boundary", () => {
+  it("creates a file only when explicit expected absence still holds", async () => {
+    const path = join(root, "state.json");
+    await atomicWrite(path, "first", null);
+    await expect(atomicWrite(path, "second", null)).rejects.toMatchObject({
+      code: "CONCURRENT_SOURCE_MODIFICATION",
+    });
+    expect(await readFile(path, "utf8")).toBe("first");
+  });
+  it("checks hashes against exact bytes including malformed UTF-8", async () => {
+    const path = join(root, "state.json");
+    const corrupt = Buffer.from([0xff, 0xfe, 0x7b]);
+    await writeFile(path, corrupt);
+    await atomicWrite(path, "repaired", hash(corrupt));
+    expect(await readFile(path, "utf8")).toBe("repaired");
+  });
+  it("allows only one of two concurrent create-if-absent writers to publish", async () => {
+    const path = join(root, "state.json");
+    const results = await Promise.allSettled([
+      atomicWrite(path, "first", null),
+      atomicWrite(path, "second", null),
+    ]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(["first", "second"]).toContain(await readFile(path, "utf8"));
+  });
   it("rejects traversal instead of reading outside the vault", async () => {
     // Given a private root, when an untrusted path traverses, then reject it.
     await expect(safePath(root, "../secret")).rejects.toMatchObject({
