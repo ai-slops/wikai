@@ -1,6 +1,37 @@
 # Verification record
 
-Verified on 19 September 2026 in the supplied DIM workspace.
+For follow-up implementation checks through 3 October 2026, including media inspection, privacy
+and review policy, source-update repair, state operations and local deployment/rollback, see
+[current status](STATUS.md). The dated records below preserve their original scopes; test counts
+are historical snapshots, not a current final total.
+
+## Current operating verification, 3 October 2026
+
+| Check | Observed result |
+| --- | --- |
+| Docker 29.1.3 isolated CLI release | Passed with five approved pages |
+| Final dist privacy audit | `[]`, exit 0 |
+| Local directory deployment | Two successive generations applied successfully |
+| Local rollback | Previous exact generation and evidence restored successfully |
+| Unknown deployment environment | Failed closed as expected |
+| Browser at 1280 and 390 pixels | Merge, stale refusal, blocked repair and inspection passed; zero console errors |
+| Inert XMP presentation | Displayed as text, not interpreted markup |
+| Root TypeScript check | Passed |
+| Astro check | 26 files, zero errors, warnings or hints |
+| Biome | Exit 0; four existing CSS warnings and ten informational messages |
+| Final full Vitest suite | 449 tests passed across 63 files |
+| TypeScript LSP | Zero errors in apps and checked package directories |
+
+The final suite includes the configured deployment CLI resolver regression. TypeScript LSP is
+installed; earlier intermittent timeouts were followed by successful directory diagnostics.
+The lead also repeated attachment inspection and manual source merging in the live browser:
+XMP produced no executable nodes, the merged body rendered in the sandboxed preview, approval
+remained absent, and the 390-pixel viewport had no horizontal overflow or console warnings.
+Temporary fixtures were separate from `.local`; no real external host was deployed.
+
+## Historical baseline, 19 September 2026
+
+Verified in the supplied DIM workspace.
 
 ## Automated checks
 
@@ -45,12 +76,16 @@ An actual renderer container was run with network disabled, read-only root, drop
 
 The renderer now terminates normally and its exit status is checked. A bounded, read-only helper keeps the output volume mounted during export. Earlier failures exposed an exporter tmpfs-lifetime bug; the corrected full build and audit succeeded. Failure regressions confirm that previous dist remains intact.
 
-## Operating limits
+## Historical operating limits at that baseline
 
 - Real vaults must remain in a separate private repository. The checked-in demo generator creates only illustrative data under ignored `.local/`.
-- Non-image attachment review is an explicit hash allowlist. PDF/archive/media metadata examination is a manual review responsibility; this version does not automatically extract every format's embedded metadata.
+- At that baseline, PDF/archive/media metadata examination was entirely manual. Current inspection
+  extracts bounded PDF/archive and MP3/WAV/MP4/WebM container/header metadata, but not every
+  embedded field or payload; exact-hash review remains authoritative.
 - The dashboard is local by default. Remote use requires an authenticated proxy/tunnel and the configured bearer token and origin; no public anonymous studio is exposed.
-- Hosting adapters, automatic deployment, revision garbage collection and collaborative editing are not configured.
+- At that baseline, deployment adapters and revision GC were unavailable. Current local directory
+  deploy/rollback and revision GC are explicit plan/apply operations; remote hosting adapters,
+  cache purge, 410 responses and collaborative editing remain unavailable.
 - File hash checks are not a kernel-level compare-and-swap against unrelated editors. Avoid simultaneous saves during mutation, as detailed in `SECURITY.md`.
 
 ## Repository delivery

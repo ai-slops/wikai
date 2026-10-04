@@ -16,6 +16,15 @@ assets:
   reviewedHashes: []
 security:
   denyPatterns: ["PRIVATE_SENTINEL_[A-Z0-9_]+"]
+  warnPrivateTitles: true
+  scanPii: true
+  scanHighEntropy: true
+review:
+  warnAfterDays:
+    work: 180
+    knowledge: 180
+    log: 0
+    page: 365
 site:
   sourceDir: ./site
   distDir: ../build/public-dist
@@ -23,3 +32,7 @@ site:
   isolatedBuild: true
   network: disabled
   image: wikai-site:local
+deployments:
+  local:
+    type: directory
+    root: ../deployments/local

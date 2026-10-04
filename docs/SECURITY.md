@@ -6,7 +6,11 @@ Wikai is a single-user local publishing tool, not an online private wiki server.
 
 All notes start private. Adding `public.status: published` does not approve or release a note. Only explicit approval activates an immutable revision. Changes to the source and its assets require a new approval. Deleting the source does not withdraw an approved publication.
 
-The system cannot determine whether ordinary prose is confidential. Pattern scans are supplementary checks, not a guarantee. Review text, captions, alt text, URLs, query parameters, link titles, metadata, and all referenced attachments. Content copied by third parties cannot be fully recalled after publication.
+The system cannot determine whether ordinary prose is confidential. Credential/custom deny-pattern
+errors and configurable private-title, email, phone-number and high-entropy warnings are
+supplementary checks, not a guarantee. Review text, captions, alt text, URLs, query parameters,
+link titles, metadata, and all referenced attachments. Content copied by third parties cannot be
+fully recalled after publication.
 
 ## Storage and Git
 
@@ -30,17 +34,53 @@ File hash checks detect edits observed before replacement, but ordinary filesyst
 
 Immutable revision integrity is checked on read. Do not hand-edit revision files or state. Preserve corrupt files for investigation and restore the state directory from a known-good backup if necessary. A missing or corrupt state is an error, not permission to publish current source files.
 
+Use the [read-only state recovery report](STATE-RECOVERY.md) before attempting repairs.
+Recovery requires a validated backup or explicit reviewed source bindings and leaves all
+reconstructed publications inactive. Applying requires a matching plan hash, confirmation
+and the publication lock. Exact existing state bytes are backed up before replacement;
+missing-state creation cannot overwrite a concurrently created file. Unsupported schema
+versions and invalid revision evidence are never bypassed. Private state v1 is readable;
+new writes use v2. Back up before upgrading and do not hand-edit the version to downgrade.
+
 ## Attachments
 
 Only referenced files are included. Raster images are decoded and re-encoded, removing embedded metadata. This does not remove sensitive visual information, such as screenshots of credentials or personal details.
 
 SVG, HTML, executable code and remote images are rejected. Non-raster files require an explicit content-hash review and must live under `public-assets`. Review PDF metadata, archive entry names, audio/video metadata and text contents independently. A review is specific to the exact file bytes; editing the attachment invalidates it.
 
+`assets inspect` provides [bounded private PDF/archive metadata](ASSET-REVIEW.md), not an
+approval or confidentiality certificate. It never adds reviewed hashes, executes attachment
+scripts or writes extracted archive entries. Linux resource limits and Node permission
+allowlists constrain the parser process, but this is not a malicious-code or network sandbox.
+Catalog XMP packets and scalar custom Info values can be displayed as bounded private data.
+XML entities and scripts are never interpreted, and the inspector does not redact the PDF.
+Complex fields, page-level/embedded metadata, unsupported filters, media frames/samples/cover art,
+codec payloads and archive contents still require separate inspection. MP3/WAV/MP4/WebM inspection
+reports only bounded common tags and stream headers through a protocol-restricted `ffprobe` child.
+Do not publish reports or render XMP as HTML/XML;
+their packet text, filenames, authors and comments may be private even when the attachment is
+being prepared for publication. Approving the original PDF also approves its unmodified bytes.
+
 ## Renderer isolation
 
 Prepare the renderer image before a release. Dependency acquisition needs network access; rendering does not. Release rendering runs in a separate container with network disabled, dropped capabilities, a read-only root filesystem and no private mounts. Never add the vault, home directory, Docker socket, SSH keys, Git credentials or publisher state to that container.
 
 Do not substitute an unsandboxed `astro build` for a release. Failure to prepare or launch the isolated renderer must fail the release rather than weaken isolation. Staging and dist are regenerated in temporary locations and promoted only after validation. A failed build does not replace an existing dist.
+
+## Local directory deployment
+
+No deployment happens by default. A local environment must be explicitly configured as
+`deployments.<name>.type: directory` with its own root. `deploy directory` and `deploy rollback`
+are read-only plans unless `--apply`, the exact reviewed plan hash and confirmation are supplied.
+The deploy path rechecks the private build receipt, active revisions, redirect/staging policies,
+dist fingerprint and privacy audit. It copies and audits a temporary generation before promotion,
+keeps one `.previous` generation, promotes matching private evidence, and records deployed
+revisions only after success. Rollback accepts only the retained generation whose destination,
+fingerprint and policy evidence match, audits it again, and swaps both generation and evidence.
+
+Private deployment evidence under `publisher.stateDir/deployments` is part of the security record.
+Do not edit or selectively delete it. Revision GC reads current and `.previous` evidence for every
+configured environment and preserves every referenced revision. See [operations](OPERATIONS.md).
 
 ## Before first deployment
 
@@ -52,6 +92,7 @@ Do not substitute an unsandboxed `astro build` for a release. Failure to prepare
 - Run a release and audit its final dist.
 - Confirm no source maps, private IDs, source paths, sentinel markers or credentials occur.
 - Test withdrawal and ensure the hosting provider removes stale routes and assets.
-- Upload only the audited dist using a versioned deployment and atomic hosting switch.
+- Configure a dedicated local directory destination, review the deployment plan, and apply its exact hash.
 
-Hosting credentials and automatic deployment are intentionally outside the default application. A deployment adapter must never mark a revision deployed before the hosting operation succeeds.
+Remote-provider credentials/adapters, cache purge, hosting health checks/atomic provider switching,
+and 410 responses are not implemented. The built-in deployment target is a local directory only.
