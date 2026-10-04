@@ -8,6 +8,22 @@ type ReadOptions = { readonly json?: boolean };
 
 export function registerReadCommands(program: Command): void {
   program
+    .command("assets")
+    .description("Private attachment review tools")
+    .command("inspect")
+    .argument("<path>", "vault-relative attachment path")
+    .option("--json", "emit a private JSON inspection report")
+    .action(async (path: string, options: ReadOptions) => {
+      const report = await (await publisherFor(program)).inspectAsset(path);
+      output(report, options.json);
+      if (!report.inspection.ok) {
+        throw new PublisherError(
+          report.inspection.code,
+          "Attachment inspection did not complete; review the private report",
+        );
+      }
+    });
+  program
     .command("status")
     .option("--json", "emit JSON")
     .action(async (options: ReadOptions) => {

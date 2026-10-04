@@ -2,7 +2,10 @@ import { Command } from "commander";
 import type { PublicKind } from "../../packages/model/index.ts";
 import { PublisherError } from "../../packages/model/index.ts";
 import { confirmed, output, publisherFor } from "./helpers.ts";
+import { registerOperations } from "./operations.ts";
 import { registerReadCommands } from "./read-commands.ts";
+import { registerSourceUpdate } from "./source-update.ts";
+import { registerStateCommands } from "./state-commands.ts";
 
 type MutationOptions = { readonly yes?: boolean; readonly expectedHash?: string };
 type ApprovalOptions = MutationOptions & { readonly expectedHash: string };
@@ -21,6 +24,9 @@ export function createProgram(): Command {
     .showSuggestionAfterError()
     .exitOverride();
   registerReadCommands(program);
+  registerStateCommands(program);
+  registerOperations(program);
+  registerSourceUpdate(program);
   program
     .command("candidate")
     .argument("<path>")
