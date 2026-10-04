@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { hash, safePath } from "../fs/index.ts";
 import type { PublisherConfig, VaultSnapshot, WorkingPublication } from "../model/index.ts";
 import { PublisherError } from "../model/index.ts";
+import { selectedSourceHash } from "./selection.ts";
 import { markPublished } from "./source.ts";
 
 export function assertExplicitSlug(working: WorkingPublication, vault: VaultSnapshot): void {
@@ -35,7 +36,13 @@ export async function captureApproval(
           "A private source dependency changed before approval",
         );
       }
-      return { ...source, capturedHash: currentHash };
+      return {
+        ...source,
+        capturedHash:
+          source.selection === undefined
+            ? currentHash
+            : (selectedSourceHash(document.body, source) ?? source.capturedHash),
+      };
     }),
   );
   return {

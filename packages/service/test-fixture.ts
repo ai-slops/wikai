@@ -39,5 +39,5 @@ export function knowledgeSource(input: {
   readonly body: string;
   readonly comment?: string;
 }): string {
-  return `---\n${input.comment === undefined ? "" : `# ${input.comment}\n`}id: ${input.privateId}\ntitle: ${input.title}\npublic:\n  id: ${input.publicId}\n  status: review\n  mode: mirror\n  kind: knowledge\n  knowledge:\n    documentType: topic\n${input.slug === undefined ? "" : `  slug: ${input.slug}\n`}---\n${input.body}`;
+  return `---\n${input.comment === undefined ? "" : `# ${input.comment}\n`}id: ${input.privateId}\ntitle: ${input.title}\npublic:\n  id: ${input.publicId}\n  status: review\n  mode: mirror\n  kind: knowledge\n  summary: ${JSON.stringify(`${input.title} summary`)}\n  contentState: stable\n  knowledge:\n    documentType: topic\n${input.slug === undefined ? "" : `  slug: ${input.slug}\n`}---\n${input.body}`;
 }

@@ -216,7 +216,11 @@ Public excerpt.
     });
     await publisher.updateMetadata(
       extracted.publicId,
-      { slug: "/knowledge/share-drift" },
+      {
+        slug: "/knowledge/share-drift",
+        summary: "Extracted public source",
+        contentState: "stable",
+      },
       extracted.sourceHash,
     );
     const extractedDetail = await publisher.detail(extracted.publicId);
