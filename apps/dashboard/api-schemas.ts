@@ -42,7 +42,32 @@ export const RestoreSchema = z
 export const MetadataUpdateSchema = z
   .object({ expectedHash: HashSchema, patch: MetadataPatchSchema })
   .strict();
+export const AssetInspectionQuerySchema = z
+  .object({ path: z.string().trim().min(1).max(4096) })
+  .strict();
+const SourceSelectorSchema = z
+  .object({
+    sourceId: z.string().regex(/^prv_[A-Za-z0-9_-]+$/u),
+    referenceIndex: z.coerce.number().int().nonnegative().optional(),
+    heading: z.string().trim().min(1).max(512).optional(),
+    block: z.string().trim().min(1).max(512).optional(),
+    lines: z
+      .string()
+      .regex(/^\d+:\d+$/)
+      .optional(),
+  })
+  .strict()
+  .refine((value) => [value.heading, value.block, value.lines].filter(Boolean).length <= 1, {
+    message: "Choose at most one source selector: heading, block, or lines",
+  });
+export const SourceUpdateQuerySchema = SourceSelectorSchema;
+export const ApplySourceUpdateSchema = SourceSelectorSchema.extend({
+  expectedHash: z.string().regex(/^sha256:[0-9a-f]{64}$/u),
+  body: z.string().max(2 * 1024 * 1024),
+});
 
 export type CandidateInput = z.infer<typeof CandidateSchema>;
 export type ProjectInput = z.infer<typeof ProjectSchema>;
 export type ExtractInput = z.infer<typeof ExtractSchema>;
+export type SourceUpdateInput = z.infer<typeof SourceUpdateQuerySchema>;
+export type ApplySourceUpdateInput = z.infer<typeof ApplySourceUpdateSchema>;

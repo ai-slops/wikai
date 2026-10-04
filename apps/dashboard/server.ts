@@ -7,7 +7,13 @@ import { HTTPException } from "hono/http-exception";
 import { ZodError, z } from "zod";
 import { PublisherError } from "../../packages/model/index.ts";
 import type { MetadataPatch } from "../../packages/service/schema.ts";
-import type { CandidateInput, ExtractInput, ProjectInput } from "./api-schemas.ts";
+import type {
+  ApplySourceUpdateInput,
+  CandidateInput,
+  ExtractInput,
+  ProjectInput,
+  SourceUpdateInput,
+} from "./api-schemas.ts";
 import { registerApiRoutes } from "./routes.ts";
 import { securityMiddleware } from "./security.ts";
 
@@ -24,6 +30,9 @@ export interface PublisherPort {
   preview(mode: "working" | "approved", publicId?: string): Promise<unknown>;
   build(): Promise<unknown>;
   audit(path: string): Promise<unknown>;
+  inspectAsset(path: string): Promise<unknown>;
+  sourceUpdate(publicId: string, input: SourceUpdateInput): Promise<unknown>;
+  applySourceUpdate(publicId: string, input: ApplySourceUpdateInput): Promise<unknown>;
   restore(publicId: string, revisionHash: string, expectedHash: string): Promise<unknown>;
 }
 
@@ -40,6 +49,7 @@ const tokenSchema = z.string().min(32).max(4096);
 const publicRoot = fileURLToPath(new URL("./public/", import.meta.url));
 const assets = new Map([
   ["/", { file: "index.html", type: "text/html; charset=utf-8" }],
+  ["/favicon.svg", { file: "favicon.svg", type: "image/svg+xml" }],
   ["/tokens.css", { file: "tokens.css", type: "text/css; charset=utf-8" }],
   ["/styles.css", { file: "styles.css", type: "text/css; charset=utf-8" }],
   ["/queue.css", { file: "queue.css", type: "text/css; charset=utf-8" }],
@@ -52,6 +62,14 @@ const assets = new Map([
   ["/workflow.js", { file: "workflow.js", type: "text/javascript; charset=utf-8" }],
   ["/metadata.js", { file: "metadata.js", type: "text/javascript; charset=utf-8" }],
   ["/interactions.js", { file: "interactions.js", type: "text/javascript; charset=utf-8" }],
+  ["/asset-inspection.js", { file: "asset-inspection.js", type: "text/javascript; charset=utf-8" }],
+  [
+    "/inspection-format.js",
+    { file: "inspection-format.js", type: "text/javascript; charset=utf-8" },
+  ],
+  ["/source-review.js", { file: "source-review.js", type: "text/javascript; charset=utf-8" }],
+  ["/release.js", { file: "release.js", type: "text/javascript; charset=utf-8" }],
+  ["/review-tools.css", { file: "review-tools.css", type: "text/css; charset=utf-8" }],
 ]);
 
 export function createDashboardApp(options: DashboardOptions): Hono {

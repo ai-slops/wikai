@@ -75,6 +75,147 @@ describe("dashboard API", () => {
     expect(await response.json()).toEqual({ diagnostics: [] });
   });
 
+  it("inspects a vault-relative attachment without mutating review state", async () => {
+    // Given
+    const service = publisher();
+    const app = createDashboardApp({
+      publisher: service,
+      csrfToken: "csrf-test",
+      allowedOrigin: "http://127.0.0.1:3000",
+    });
+
+    // When
+    const response = await app.request("/api/v1/assets/inspect?path=public-assets%2Fguide.pdf");
+
+    // Then
+    expect(response.status).toBe(200);
+    expect(service.inspectAsset).toHaveBeenCalledWith("public-assets/guide.pdf");
+    expect(await response.json()).toMatchObject({
+      sourcePath: "public-assets/guide.pdf",
+      sha256: "sha256:asset",
+      hashReviewed: false,
+    });
+  });
+
+  it("returns a source update review for an explicit selector", async () => {
+    // Given
+    const service = publisher();
+    const app = createDashboardApp({
+      publisher: service,
+      csrfToken: "csrf-test",
+      allowedOrigin: "http://127.0.0.1:3000",
+    });
+
+    // When
+    const response = await app.request(
+      "/api/v1/publications/pub_alpha/source-update?sourceId=prv_source&referenceIndex=0&lines=4%3A8",
+    );
+
+    // Then
+    expect(response.status).toBe(200);
+    expect(service.sourceUpdate).toHaveBeenCalledWith("pub_alpha", {
+      sourceId: "prv_source",
+      referenceIndex: 0,
+      lines: "4:8",
+    });
+    expect(await response.json()).toMatchObject({
+      publicId: "pub_alpha",
+      sourceId: "prv_source",
+      referenceIndex: 0,
+      expectedHash: `sha256:${"a".repeat(64)}`,
+      canApply: true,
+    });
+  });
+
+  it("applies only the explicitly submitted merged source body", async () => {
+    // Given
+    const service = publisher();
+    const app = createDashboardApp({
+      publisher: service,
+      csrfToken: "csrf-test",
+      allowedOrigin: "http://127.0.0.1:3000",
+    });
+
+    // When
+    const response = await app.request("/api/v1/publications/pub_alpha/source-update", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://127.0.0.1:3000",
+        "x-csrf-token": "csrf-test",
+      },
+      body: JSON.stringify({
+        sourceId: "prv_source",
+        referenceIndex: 0,
+        expectedHash: `sha256:${"a".repeat(64)}`,
+        body: "# Reviewed merge\n\nPublic text only.",
+        heading: "Public section",
+      }),
+    });
+
+    // Then
+    expect(response.status).toBe(200);
+    expect(service.applySourceUpdate).toHaveBeenCalledWith("pub_alpha", {
+      sourceId: "prv_source",
+      referenceIndex: 0,
+      expectedHash: `sha256:${"a".repeat(64)}`,
+      body: "# Reviewed merge\n\nPublic text only.",
+      heading: "Public section",
+    });
+    expect(await response.json()).toEqual({
+      publicId: "pub_alpha",
+      path: "public-views/alpha.md",
+      sourceHash: "sha256:merged",
+    });
+  });
+
+  it("rejects ambiguous source selectors before calling the service", async () => {
+    // Given
+    const service = publisher();
+    const app = createDashboardApp({
+      publisher: service,
+      csrfToken: "csrf-test",
+      allowedOrigin: "http://127.0.0.1:3000",
+    });
+
+    // When
+    const response = await app.request(
+      "/api/v1/publications/pub_alpha/source-update?sourceId=prv_source&heading=One&lines=4%3A8",
+    );
+
+    // Then
+    expect(response.status).toBe(400);
+    expect(service.sourceUpdate).not.toHaveBeenCalled();
+  });
+
+  it("requires CSRF proof before applying a reviewed source merge", async () => {
+    // Given
+    const service = publisher();
+    const app = createDashboardApp({
+      publisher: service,
+      csrfToken: "csrf-test",
+      allowedOrigin: "http://127.0.0.1:3000",
+    });
+
+    // When
+    const response = await app.request("/api/v1/publications/pub_alpha/source-update", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://127.0.0.1:3000",
+      },
+      body: JSON.stringify({
+        sourceId: "prv_source",
+        expectedHash: `sha256:${"a".repeat(64)}`,
+        body: "# Reviewed merge",
+      }),
+    });
+
+    // Then
+    expect(response.status).toBe(403);
+    expect(service.applySourceUpdate).not.toHaveBeenCalled();
+  });
+
   it("rejects a mutation without same-origin and CSRF proof", async () => {
     // Given
     const service = publisher();

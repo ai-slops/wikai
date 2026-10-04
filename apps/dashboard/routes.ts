@@ -1,7 +1,9 @@
 import type { Hono } from "hono";
 import { z } from "zod";
 import {
+  ApplySourceUpdateSchema,
   ApproveSchema,
+  AssetInspectionQuerySchema,
   CandidateSchema,
   ExtractSchema,
   MetadataUpdateSchema,
@@ -9,6 +11,7 @@ import {
   ProjectSchema,
   PublicIdSchema,
   RestoreSchema,
+  SourceUpdateQuerySchema,
   WithdrawSchema,
 } from "./api-schemas.ts";
 import { previewHtml } from "./preview.ts";
@@ -45,6 +48,10 @@ export function registerApiRoutes(app: Hono, publisher: PublisherPort, csrfToken
     return context.json({ diagnostics: status.diagnostics });
   });
   app.get("/api/v1/plan", async (context) => context.json(await publisher.plan()));
+  app.get("/api/v1/assets/inspect", async (context) => {
+    const query = AssetInspectionQuerySchema.parse(context.req.query());
+    return context.json(await publisher.inspectAsset(query.path));
+  });
   app.get("/api/v1/publications/:publicId", async (context) => {
     const publicId = PublicIdSchema.parse(context.req.param("publicId"));
     return context.json(await publisher.detail(publicId));
@@ -79,6 +86,16 @@ export function registerApiRoutes(app: Hono, publisher: PublisherPort, csrfToken
         approved: publication.approved?.assets ?? [],
       },
     });
+  });
+  app.get("/api/v1/publications/:publicId/source-update", async (context) => {
+    const publicId = PublicIdSchema.parse(context.req.param("publicId"));
+    const input = SourceUpdateQuerySchema.parse(context.req.query());
+    return context.json(await publisher.sourceUpdate(publicId, input));
+  });
+  app.post("/api/v1/publications/:publicId/source-update", async (context) => {
+    const publicId = PublicIdSchema.parse(context.req.param("publicId"));
+    const input = ApplySourceUpdateSchema.parse(await jsonBody(context.req.raw));
+    return context.json(await publisher.applySourceUpdate(publicId, input));
   });
   app.post("/api/v1/publications/:publicId/approve", async (context) => {
     const publicId = PublicIdSchema.parse(context.req.param("publicId"));
