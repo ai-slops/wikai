@@ -3,6 +3,7 @@ import { z } from "zod";
 import { PublisherError } from "../../packages/model/index.ts";
 import { markdownDiff, publicationDiff } from "./diff.ts";
 import { output, publisherFor } from "./helpers.ts";
+import { renderPlan } from "./plan-render.ts";
 
 type ReadOptions = { readonly json?: boolean };
 
@@ -33,7 +34,8 @@ export function registerReadCommands(program: Command): void {
     .command("plan")
     .option("--json", "emit JSON")
     .action(async (options: ReadOptions) => {
-      output(await (await publisherFor(program)).plan(), options.json);
+      const plan = await (await publisherFor(program)).plan();
+      output(options.json ? plan : renderPlan(plan), options.json);
     });
   program
     .command("validate")

@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { stringify } from "yaml";
 import { hash } from "../../packages/fs/index.ts";
+import { knowledgeSource } from "../../packages/service/test-fixture.ts";
 
 let root: string;
 let config: string;
@@ -44,6 +45,72 @@ it("emits a parseable JSON status through the executable", () => {
   const output: unknown = JSON.parse(result.stdout);
   expect(output).toMatchObject({ publications: [], diagnostics: [] });
   expect(result.stderr).toBe("");
+});
+
+it("emits the additive structured change contract through plan JSON without writing state", async () => {
+  // Given an authored proposal and no approval or successful-build evidence.
+  await writeFile(
+    join(root, "vault", "note.md"),
+    knowledgeSource({
+      privateId: "prv_note",
+      publicId: "pub_note",
+      title: "Note",
+      slug: "/knowledge/note",
+      body: "Public proposal.\n",
+    }),
+  );
+
+  // When plan JSON is requested through the executable.
+  const result = cli("plan", "--json");
+
+  // Then legacy keys and deterministic change data are present, and the read creates no state.
+  expect(result.status, result.stderr).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({
+    publications: expect.any(Array),
+    diagnostics: expect.any(Array),
+    approved: [],
+    redirects: [],
+    changes: {
+      proposals: {
+        baseline: "active-approved",
+        summary: { added: 1, updated: 0, unchanged: 0, blocked: 0, orphaned: 0 },
+      },
+      release: {
+        baseline: "last-successful-build",
+        available: false,
+        reason: "missing-receipt",
+      },
+    },
+  });
+  await expect(readFile(join(root, "vault", ".publisher", "state.json"))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
+});
+
+it("renders a concise readable plan by default", async () => {
+  // Given one public proposal.
+  await writeFile(
+    join(root, "vault", "note.md"),
+    knowledgeSource({
+      privateId: "prv_note",
+      publicId: "pub_note",
+      title: "Note",
+      slug: "/knowledge/note",
+      body: "Public proposal.\n",
+    }),
+  );
+
+  // When plan is requested without JSON mode.
+  const result = cli("plan");
+
+  // Then the baseline, summary, proposal status, and unavailable release evidence are readable.
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain("Proposals vs active-approved");
+  expect(result.stdout).toContain("added=1 updated=0 unchanged=0 blocked=0 orphaned=0");
+  expect(result.stdout).toContain("ADDED pub_note");
+  expect(result.stdout).toContain(
+    "Release vs last-successful-build: unavailable (missing-receipt)",
+  );
 });
 
 it("refuses a noninteractive source mutation without --yes", async () => {
