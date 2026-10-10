@@ -1,0 +1,83 @@
+.diff-view {
+  background: var(--color-paper-strong);
+  border: 1px solid var(--color-rule);
+  padding: var(--space-4);
+}
+.diff-legend {
+  border-block-end: 1px solid var(--color-rule-strong);
+  display: flex;
+  flex-wrap: wrap;
+  font: 700 var(--text-caption) / 1.35 var(--font-mono);
+  gap: var(--space-3) var(--space-6);
+  padding-block-end: var(--space-3);
+}
+.diff-section {
+  border-block-end: 1px solid var(--color-rule);
+  padding-block: var(--space-5);
+}
+.diff-section:last-child {
+  border-block-end: 0;
+  padding-block-end: 0;
+}
+.diff-heading {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  justify-content: space-between;
+}
+.diff-title {
+  margin: 0;
+}
+.diff-lines {
+  font: 450 var(--text-small) / 1.55 var(--font-mono);
+  margin: var(--space-3) 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.diff-part {
+  display: block;
+  overflow-wrap: anywhere;
+  padding-inline: var(--space-2);
+}
+.diff-part--added {
+  background: var(--color-success-wash);
+  border-inline-start: 3px solid var(--color-success);
+}
+.diff-part--removed {
+  background: var(--color-danger-wash);
+  border-inline-start: 3px solid var(--color-danger);
+}
+.diff-part--unchanged {
+  color: var(--color-ink-muted);
+  padding-inline-start: calc(var(--space-2) + 3px);
+}
+.diff-empty,
+.diff-first,
+.diff-unavailable {
+  color: var(--color-ink-muted);
+  font-size: var(--text-small);
+  margin: var(--space-3) 0 0;
+}
+.diff-first,
+.diff-unavailable {
+  background: var(--color-accent-wash);
+  color: var(--color-ink);
+  padding: var(--space-3);
+}
+.diff-unavailable p {
+  margin: var(--space-1) 0 0;
+}
+.diagnostic-heading {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  justify-content: space-between;
+  margin-block-end: var(--space-1);
+}
+.diagnostic-location {
+  color: var(--color-ink-muted);
+  font: 600 var(--text-caption) / 1.35 var(--font-mono);
+  overflow-wrap: anywhere;
+}
