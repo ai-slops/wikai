@@ -7,15 +7,17 @@ import { minimatch } from "minimatch";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 import { visit } from "unist-util-visit";
-import { parseDocument } from "yaml";
+import { isMap, isNode, isScalar, parseDocument } from "yaml";
 import { hash } from "../fs/index.ts";
 import { splitMarkdownSource } from "../markdown/frontmatter.ts";
+import { offsetSourceRange } from "../markdown/source-range.ts";
 import {
   type Diagnostic,
   FrontmatterSchema,
   type PrivateDocument,
   type PublisherConfig,
   PublisherError,
+  type SourceRange,
   type VaultSnapshot,
 } from "../model/index.ts";
 
@@ -29,19 +31,39 @@ const PUBLIC_KEY_VARIANTS = new Set([
 
 class VaultError extends Error {
   readonly code: string;
-  constructor(code: string, message: string) {
+  readonly sourceRange: SourceRange | undefined;
+  constructor(code: string, message: string, sourceRange?: SourceRange) {
     super(message);
     this.name = "VaultError";
     this.code = code;
+    this.sourceRange = sourceRange;
   }
 }
 
-const diagnostic = (code: string, message: string, sourcePath: string): Diagnostic => ({
+const diagnostic = (
+  code: string,
+  message: string,
+  sourcePath: string,
+  sourceRange?: SourceRange,
+): Diagnostic => ({
   code,
   severity: "error",
   message,
   sourcePath,
+  ...(sourceRange === undefined ? {} : { sourceRange }),
 });
+
+const yamlSourceRange = (
+  raw: string,
+  frontmatterOffset: number,
+  value: unknown,
+): SourceRange | undefined => {
+  if (!isNode(value)) return undefined;
+  const range = value.range;
+  if (range === undefined || range === null) return undefined;
+  const [start, end] = range;
+  return offsetSourceRange(raw, frontmatterOffset + start, frontmatterOffset + end);
+};
 
 const discover = async (
   root: string,
@@ -74,19 +96,42 @@ const discover = async (
 
 const parseSource = (raw: string, sourcePath: string): PrivateDocument => {
   const { frontmatter, body } = splitMarkdownSource(raw);
+  const frontmatterOffset = raw.indexOf("\n") + 1;
   const yaml = parseDocument(frontmatter || "{}", { uniqueKeys: true });
-  if (yaml.errors.length > 0)
-    throw new VaultError("FRONTMATTER_INVALID", "Markdown frontmatter is invalid");
+  const yamlError = yaml.errors[0];
+  if (yamlError !== undefined) {
+    const [start, end] = yamlError.pos;
+    throw new VaultError(
+      "FRONTMATTER_INVALID",
+      "Markdown frontmatter is invalid",
+      offsetSourceRange(raw, frontmatterOffset + start, frontmatterOffset + end),
+    );
+  }
   const parsed = FrontmatterSchema.safeParse(yaml.toJS({ maxAliasCount: 20 }));
-  if (!parsed.success)
-    throw new VaultError("FRONTMATTER_INVALID", "Markdown frontmatter is invalid");
-  if (
-    Object.keys(parsed.data).some((key) => PUBLIC_KEY_VARIANTS.has(key.toLocaleLowerCase("en-US")))
-  )
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const node = issue === undefined ? undefined : yaml.getIn(issue.path, true);
+    throw new VaultError(
+      "FRONTMATTER_INVALID",
+      "Markdown frontmatter is invalid",
+      yamlSourceRange(raw, frontmatterOffset, node),
+    );
+  }
+  const invalidPublicKey = Object.keys(parsed.data).find((key) =>
+    PUBLIC_KEY_VARIANTS.has(key.toLocaleLowerCase("en-US")),
+  );
+  if (invalidPublicKey !== undefined) {
+    const pair = isMap(yaml.contents)
+      ? yaml.contents.items.find(
+          (item) => isScalar(item.key) && item.key.value === invalidPublicKey,
+        )
+      : undefined;
     throw new VaultError(
       "FRONTMATTER_PUBLIC_KEY_INVALID",
       "Use the exact public frontmatter key for publication settings",
+      yamlSourceRange(raw, frontmatterOffset, pair?.key),
     );
+  }
   const tree: Root = unified().use(remarkParse).parse(body);
   const slugger = new GithubSlugger();
   const headings: { title: string; id: string }[] = [];
@@ -113,7 +158,14 @@ export const loadVault = async (config: PublisherConfig): Promise<VaultSnapshot>
       documents.push(parseSource(raw, sourcePath));
     } catch (error) {
       if (error instanceof VaultError || error instanceof PublisherError)
-        diagnostics.push(diagnostic(error.code, error.message, sourcePath));
+        diagnostics.push(
+          diagnostic(
+            error.code,
+            error.message,
+            sourcePath,
+            error instanceof VaultError ? error.sourceRange : undefined,
+          ),
+        );
       else if (error instanceof Error)
         diagnostics.push(
           diagnostic("VAULT_READ_FAILED", "Markdown could not be parsed safely", sourcePath),

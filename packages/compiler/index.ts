@@ -1,10 +1,12 @@
 import { MarkdownError } from "../markdown/index.ts";
+import { shiftSourceRange } from "../markdown/source-range.ts";
 import type {
   ApprovedRevision,
   Diagnostic,
   PrivateDocument,
   PublicationPlan,
   PublisherConfig,
+  SourceRange,
   VaultSnapshot,
   WorkingPublication,
 } from "../model/index.ts";
@@ -14,12 +16,18 @@ import { CompilerError } from "./metadata.ts";
 import { compileDocument } from "./publication.ts";
 import { approvedTarget, buildVaultTargets } from "./targets.ts";
 
-const errorDiagnostic = (code: string, message: string, document: PrivateDocument): Diagnostic => ({
+const errorDiagnostic = (
+  code: string,
+  message: string,
+  document: PrivateDocument,
+  sourceRange?: SourceRange,
+): Diagnostic => ({
   code,
   severity: "error",
   message,
   sourcePath: document.sourcePath,
   ...(document.frontmatter.public ? { publicId: document.frontmatter.public.id } : {}),
+  ...(sourceRange === undefined ? {} : { sourceRange }),
 });
 
 const publicationRoutes = (publication: WorkingPublication): readonly string[] =>
@@ -109,7 +117,22 @@ export const compile = async (
           ),
         );
     } catch (error) {
-      if (error instanceof MarkdownError || error instanceof CompilerError)
+      if (error instanceof MarkdownError)
+        diagnostics.push(
+          errorDiagnostic(
+            error.code,
+            error.message,
+            document,
+            error.sourceRange === undefined
+              ? undefined
+              : shiftSourceRange(
+                  error.sourceRange,
+                  document.raw,
+                  document.raw.length - document.body.length,
+                ),
+          ),
+        );
+      else if (error instanceof CompilerError)
         diagnostics.push(errorDiagnostic(error.code, error.message, document));
       else if (error instanceof Error)
         diagnostics.push(
