@@ -45,6 +45,7 @@ export const DiagnosticSchema = z.object({
   hint: z.string().optional(),
 });
 export type Diagnostic = z.infer<typeof DiagnosticSchema>;
+export type SourceRange = NonNullable<Diagnostic["sourceRange"]>;
 export const AssetSchema = z.object({
   publicPath: z.string(),
   hash: z.string(),
