@@ -1,5 +1,22 @@
 # Verification record
 
+## Scoped review improvements, 10 October 2026
+
+- Full suite: 479 tests passed across 68 files. TypeScript passed; Biome exited 0 with
+  the existing four CSS warnings and ten informational messages.
+- Actual CLI `plan` compared five active approvals with the last successful build,
+  showing five unchanged records on each baseline and no redirect changes.
+- Actual CLI `validate --json` located an unresolved wiki link at original source
+  line 13, columns 13 through 29 (end exclusive), and exited nonzero without a body excerpt.
+- Dashboard four-part diff displayed additions/removals in metadata, Markdown, links,
+  and assets. Desktop/mobile QA covered unchanged, first approval and unavailable working
+  revisions. Unavailable working content explicitly preserves the approved revision.
+- Parser ranges include BOM/frontmatter/CRLF translation. Global and missing-field
+  diagnostics do not receive invented source positions.
+- Astro preview, mandatory Home existence, additional inspection formats and default
+  exclusion policies were explicitly excluded from this follow-up. Renderer/build behavior
+  was unchanged; no new isolated Docker build is claimed for this change.
+
 For follow-up implementation checks through 3 October 2026, including media inspection, privacy
 and review policy, source-update repair, state operations and local deployment/rollback, see
 [current status](STATUS.md). The dated records below preserve their original scopes; test counts

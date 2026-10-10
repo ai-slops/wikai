@@ -4,6 +4,21 @@ Initial assessment: 2026-09-22. Latest follow-up: 2026-10-03. Baseline: [v0.1 re
 
 ## Summary
 
+### Agreed build-only scope, 2026-10-10
+
+Article-body preview is sufficient; preview need not run Astro. Zero or one Home page is
+allowed, with duplicate routes still rejected. Additional attachment-inspection formats,
+default discovery exclusions, remote hosting integrations, and later optional extensions
+are not required for this scope.
+
+The remaining review improvements are implemented: parser-derived original-file diagnostic
+positions, explicit proposal and approved-release change plans, and accessible four-part
+addition/deletion highlighting. Missing working content is not presented as withdrawal.
+See [change plan](CHANGE-PLAN.md) for baselines and unavailable-evidence semantics.
+
+The scoped follow-up passed 479 tests across 68 files, TypeScript and lint checks, plus
+actual CLI plan/diagnostic use and desktop/mobile dashboard verification.
+
 The repository is beyond the first-PR/compiler-only scope. It contains the compiler, assets, immutable approval/state lifecycle, release staging, Astro renderer, isolated Docker build, CLI, extraction, manual source-update repair, a local dashboard, private release receipts, local directory deployment/rollback, slug release and revision GC. The principal local publication path works end to end. All ten roadmap phases have implementation, but remote-provider operations and several exhaustive inspection requirements remain absent.
 
 Before this assessment, the repository had a short implementation contract and historical verification notes, but no standalone original-phase roadmap. `wikai.md` now records the target requirements separately from implementation facts. It is an English digest, not the full original Korean text or its complete example/type listings.
