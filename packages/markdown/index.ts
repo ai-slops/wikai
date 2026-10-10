@@ -23,6 +23,7 @@ import {
   type VaultLinkTarget,
 } from "./link-resolver.ts";
 import { expandReferences, removePositions } from "./references.ts";
+import { sourceRange, textSourceRange } from "./source-range.ts";
 
 export type { LinkTarget, VaultLinkTarget } from "./link-resolver.ts";
 export { MarkdownError } from "./link-resolver.ts";
@@ -49,11 +50,12 @@ const materialize = async (
   url: string,
   sourcePath: string,
   config: PublisherConfig,
+  range: ReturnType<typeof sourceRange>,
 ): Promise<MaterializedAsset> => {
   try {
     return await materializeAsset(url, sourcePath, config);
   } catch (error) {
-    if (error instanceof AssetError) throw new MarkdownError(error.code, error.message);
+    if (error instanceof AssetError) throw new MarkdownError(error.code, error.message, range);
     throw error;
   }
 };
@@ -76,12 +78,21 @@ const validateStructure = (tree: Root): void => {
       }
       return;
     }
-    throw new MarkdownError("MARKDOWN_HTML_FORBIDDEN", "Raw HTML and MDX are forbidden");
+    throw new MarkdownError(
+      "MARKDOWN_HTML_FORBIDDEN",
+      "Raw HTML and MDX are forbidden",
+      sourceRange(node),
+    );
   });
   removePositions(comments);
   visit(tree, "text", (node: Text) => {
-    if (/\{[^{}\n]+\}/u.test(node.value))
-      throw new MarkdownError("MARKDOWN_MDX_FORBIDDEN", "MDX expressions are forbidden");
+    const expression = /\{[^{}\n]+\}/u.exec(node.value);
+    if (expression?.index !== undefined)
+      throw new MarkdownError(
+        "MARKDOWN_MDX_FORBIDDEN",
+        "MDX expressions are forbidden",
+        textSourceRange(node, expression.index, expression.index + expression[0].length),
+      );
   });
   const slugger = new GithubSlugger();
   visit(tree, "heading", (node: Heading) => {
@@ -95,7 +106,12 @@ const transformImages = async (tree: Root, state: TransformState): Promise<void>
     images.push(node);
   });
   for (const image of images) {
-    const asset = await materialize(image.url, state.context.sourcePath, state.config);
+    const asset = await materialize(
+      image.url,
+      state.context.sourcePath,
+      state.config,
+      sourceRange(image),
+    );
     state.assets.push(asset);
     image.url = asset.publicPath;
   }
@@ -109,26 +125,47 @@ const transformLinks = async (tree: Root, state: TransformState): Promise<void> 
   for (const link of links) {
     if (isExternal(link.url)) continue;
     if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/iu.test(link.url))
-      throw new MarkdownError("MARKDOWN_LINK_SCHEME_FORBIDDEN", "Link protocol is forbidden");
+      throw new MarkdownError(
+        "MARKDOWN_LINK_SCHEME_FORBIDDEN",
+        "Link protocol is forbidden",
+        sourceRange(link),
+      );
     if (link.url.startsWith("#")) {
       const selfContext = {
         ...state.context,
         targets: [state.context.self],
         vaultTargets: [],
       };
-      const resolved = publicLink(state.context.self.slug, link.url.slice(1), selfContext);
+      let resolved: PublicLink;
+      try {
+        resolved = publicLink(state.context.self.slug, link.url.slice(1), selfContext);
+      } catch (error) {
+        if (error instanceof MarkdownError) throw error.at(sourceRange(link));
+        throw error;
+      }
       state.outgoing.push(resolved);
       link.url = linkUrl(resolved);
       continue;
     }
     const { reference, anchor } = splitReference(link.url);
     if (isAssetReference(reference, state.context.sourcePath, state.config.assets.roots)) {
-      const asset = await materialize(reference, state.context.sourcePath, state.config);
+      const asset = await materialize(
+        reference,
+        state.context.sourcePath,
+        state.config,
+        sourceRange(link),
+      );
       state.assets.push(asset);
       link.url = asset.publicPath;
       continue;
     }
-    const resolved = publicLink(reference, anchor, state.context);
+    let resolved: PublicLink;
+    try {
+      resolved = publicLink(reference, anchor, state.context);
+    } catch (error) {
+      if (error instanceof MarkdownError) throw error.at(sourceRange(link));
+      throw error;
+    }
     state.outgoing.push(resolved);
     link.url = linkUrl(resolved);
   }

@@ -1,6 +1,7 @@
 import type { Definition, ImageReference, LinkReference, Parent, Root } from "mdast";
 import { visit } from "unist-util-visit";
 import { MarkdownError } from "./link-resolver.ts";
+import { sourceRange } from "./source-range.ts";
 
 export const removePositions = (positions: ReadonlyMap<Parent, readonly number[]>): void => {
   for (const [parent, indexes] of positions) {
@@ -18,6 +19,7 @@ export const expandReferences = (tree: Root): void => {
       throw new MarkdownError(
         "AMBIGUOUS_MARKDOWN_REFERENCE",
         "Markdown reference identifier is ambiguous",
+        sourceRange(node),
       );
     definitions.set(key, node);
   });
@@ -28,12 +30,14 @@ export const expandReferences = (tree: Root): void => {
       throw new MarkdownError(
         "UNRESOLVED_MARKDOWN_REFERENCE",
         "Markdown link reference is unresolved",
+        sourceRange(node),
       );
     parent.children.splice(index, 1, {
       type: "link",
       url: definition.url,
       ...(definition.title ? { title: definition.title } : {}),
       children: node.children,
+      position: node.position,
     });
   });
   visit(tree, "imageReference", (node: ImageReference, index, parent: Parent | undefined) => {
@@ -43,12 +47,14 @@ export const expandReferences = (tree: Root): void => {
       throw new MarkdownError(
         "UNRESOLVED_MARKDOWN_REFERENCE",
         "Markdown image reference is unresolved",
+        sourceRange(node),
       );
     parent.children.splice(index, 1, {
       type: "image",
       url: definition.url,
       alt: node.alt,
       ...(definition.title ? { title: definition.title } : {}),
+      position: node.position,
     });
   });
   const positions = new Map<Parent, number[]>();

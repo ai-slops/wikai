@@ -2,7 +2,8 @@ import { extname, posix } from "node:path";
 import GithubSlugger from "github-slugger";
 import type { Parent, Root, RootContent, Text } from "mdast";
 import { visit } from "unist-util-visit";
-import type { PublicKind, PublicLink } from "../model/index.ts";
+import type { PublicKind, PublicLink, SourceRange } from "../model/index.ts";
+import { positionFromSourceRange, textSourceRange } from "./source-range.ts";
 
 export type LinkTarget = {
   readonly publicId: string;
@@ -31,10 +32,18 @@ export type LinkContext = {
 
 export class MarkdownError extends Error {
   readonly code: string;
-  constructor(code: string, message: string) {
+  readonly sourceRange: SourceRange | undefined;
+  constructor(code: string, message: string, sourceRange?: SourceRange) {
     super(message);
     this.name = "MarkdownError";
     this.code = code;
+    this.sourceRange = sourceRange;
+  }
+
+  at(sourceRange: SourceRange | undefined): MarkdownError {
+    return this.sourceRange === undefined && sourceRange !== undefined
+      ? new MarkdownError(this.code, this.message, sourceRange)
+      : this;
   }
 }
 
@@ -158,31 +167,48 @@ const parseWikiText = (
     if (opening < 0) break;
     const embedded = opening > 0 && node.value[opening - 1] === "!";
     const closing = node.value.indexOf("]]", opening + 2);
-    if (closing < 0) throw new MarkdownError("LINK_INVALID", "Wiki link is not closed");
+    if (closing < 0)
+      throw new MarkdownError(
+        "LINK_INVALID",
+        "Wiki link is not closed",
+        textSourceRange(node, embedded ? opening - 1 : opening, node.value.length),
+      );
     const textEnd = embedded ? opening - 1 : opening;
     if (textEnd > cursor) parts.push({ type: "text", value: node.value.slice(cursor, textEnd) });
     const inner = node.value.slice(opening + 2, closing);
     const [destination = "", label] = inner.split("|", 2);
     const { reference, anchor } = splitReference(destination);
-    if (embedded) {
-      const extension = extname(reference).toLowerCase();
-      if (anchor || extension === "" || extension === ".md")
-        throw new MarkdownError(
-          "MARKDOWN_TRANSCLUSION_FORBIDDEN",
-          "Note transclusion is forbidden",
-        );
-      parts.push({ type: "image", url: reference, alt: label ?? "" });
-      cursor = closing + 2;
-      continue;
+    const range = textSourceRange(node, embedded ? opening - 1 : opening, closing + 2);
+    try {
+      if (embedded) {
+        const extension = extname(reference).toLowerCase();
+        if (anchor || extension === "" || extension === ".md")
+          throw new MarkdownError(
+            "MARKDOWN_TRANSCLUSION_FORBIDDEN",
+            "Note transclusion is forbidden",
+          );
+        parts.push({
+          type: "image",
+          url: reference,
+          alt: label ?? "",
+          ...(range === undefined ? {} : { position: positionFromSourceRange(range) }),
+        });
+        cursor = closing + 2;
+        continue;
+      }
+      const target = resolveTarget(reference, context);
+      const resolved = publicLink(reference, anchor, context);
+      outgoing.push(resolved);
+      parts.push({
+        type: "link",
+        url: linkUrl(resolved),
+        children: [{ type: "text", value: label ?? target.title }],
+        ...(range === undefined ? {} : { position: positionFromSourceRange(range) }),
+      });
+    } catch (error) {
+      if (error instanceof MarkdownError) throw error.at(range);
+      throw error;
     }
-    const target = resolveTarget(reference, context);
-    const resolved = publicLink(reference, anchor, context);
-    outgoing.push(resolved);
-    parts.push({
-      type: "link",
-      url: linkUrl(resolved),
-      children: [{ type: "text", value: label ?? target.title }],
-    });
     cursor = closing + 2;
   }
   if (parts.length === 0) return undefined;
