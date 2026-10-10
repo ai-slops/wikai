@@ -259,6 +259,56 @@ Public excerpt.
     );
   });
 
+  it("exposes additive proposal changes and an honest unavailable release baseline", async () => {
+    // Given one approved publication with a changed working source and one blocked source.
+    const changedPath = join(vault, "changed.md");
+    const changedSource = knowledgeSource({
+      privateId: "prv_changed",
+      publicId: "pub_changed",
+      title: "Changed",
+      slug: "/knowledge/changed",
+      body: "Original body.\n",
+    });
+    await writeFile(changedPath, changedSource);
+    await writeFile(
+      join(vault, "blocked.md"),
+      knowledgeSource({
+        privateId: "prv_blocked",
+        publicId: "pub_blocked",
+        title: "Blocked",
+        slug: "/knowledge/blocked",
+        body: "<script>blocked</script>\n",
+      }),
+    );
+    const publisher = await Publisher.open(configPath);
+    const exposureHash = (await publisher.detail("pub_changed")).working?.exposureHash;
+    if (exposureHash === undefined) throw new TypeError("working publication missing");
+    await publisher.approve("pub_changed", exposureHash);
+    await writeFile(changedPath, changedSource.replace("Original body.", "Changed body."));
+
+    // When a plan is read without any successful-build receipt.
+    const plan = await publisher.plan();
+
+    // Then existing keys remain and proposal/release semantics are explicit.
+    expect(plan).toMatchObject({
+      publications: expect.any(Array),
+      diagnostics: expect.any(Array),
+      approved: expect.any(Array),
+      redirects: expect.any(Array),
+      changes: {
+        proposals: {
+          baseline: "active-approved",
+          summary: { added: 0, updated: 1, unchanged: 0, blocked: 1, orphaned: 0 },
+        },
+        release: {
+          baseline: "last-successful-build",
+          available: false,
+          reason: "missing-receipt",
+        },
+      },
+    });
+  });
+
   it("edits reviewed metadata with source-hash concurrency", async () => {
     // Given a candidate source, when metadata is patched, then CST prose survives and stale writes fail.
     const path = join(vault, "metadata.md");

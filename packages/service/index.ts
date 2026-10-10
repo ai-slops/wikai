@@ -1,12 +1,7 @@
 import { auditDist } from "../audit/index.ts";
 import { compile, loadVault } from "../compiler/index.ts";
 import { loadConfig } from "../config/index.ts";
-import type {
-  ApprovedRevision,
-  PublicationPlan,
-  PublisherConfig,
-  WorkingPublication,
-} from "../model/index.ts";
+import type { ApprovedRevision, PublisherConfig, WorkingPublication } from "../model/index.ts";
 import { PublisherError } from "../model/index.ts";
 import { buildReleaseStaging, buildSite } from "../release/index.ts";
 import { PublisherState } from "../state/index.ts";
@@ -14,7 +9,7 @@ import { assertExplicitSlug, captureApproval } from "./approval.ts";
 import { inspectAsset } from "./assets.ts";
 import { hasSourceDrift } from "./drift.ts";
 import { createExtraction, createProject } from "./projection.ts";
-import { reviewAgeDiagnostics } from "./review-policy.ts";
+import { createPublisherPlan, type PublisherPlan } from "./publisher-plan.ts";
 import {
   type CandidateInput,
   CandidateInputSchema,
@@ -33,10 +28,7 @@ import { applySourceUpdate, planSourceUpdate } from "./source-update.ts";
 import type { SourceUpdateApply, SourceUpdateInput } from "./source-update-schema.ts";
 import { createStatus } from "./status.ts";
 
-export type PublisherPlan = PublicationPlan & {
-  readonly approved: readonly ApprovedRevision[];
-  readonly redirects: Awaited<ReturnType<PublisherState["snapshot"]>>["redirects"];
-};
+export type { PublisherPlan } from "./publisher-plan.ts";
 
 export type PreviewResult =
   | { readonly mode: "working"; readonly publications: readonly WorkingPublication[] }
@@ -57,20 +49,7 @@ export class Publisher {
   }
 
   async plan(): Promise<PublisherPlan> {
-    const snapshot = await this.state.snapshot();
-    const vault = await loadVault(this.config);
-    const plan = await compile(vault, this.config, snapshot.approved);
-    const reviewDiagnostics = reviewAgeDiagnostics({
-      approved: snapshot.approved,
-      config: this.config,
-      reviewedAt: await this.state.reviewTimes(),
-    });
-    return {
-      ...plan,
-      diagnostics: [...plan.diagnostics, ...reviewDiagnostics],
-      approved: snapshot.approved,
-      redirects: snapshot.redirects,
-    };
+    return createPublisherPlan(this.config, this.state);
   }
 
   async status(): Promise<PublisherStatus> {
