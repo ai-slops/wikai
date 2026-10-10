@@ -1,3 +1,5 @@
+import { renderPublicationDiff } from "./diff-render.js";
+
 function escapeHtml(value) {
   return String(value ?? "").replace(
     /[&<>'"]/g,
@@ -73,20 +75,40 @@ function exposureList(working, diagnostics) {
 
 function diagnosticList(diagnostics) {
   if (!diagnostics?.length) return '<p class="muted">No diagnostics for this working revision.</p>';
-  return `<ul class="diagnostic-list">${diagnostics.map((item) => `<li class="diagnostic diagnostic--${escapeHtml(item.severity)}"><code>${escapeHtml(item.code)}</code><br>${escapeHtml(item.message)}${item.hint ? `<br><small>${escapeHtml(item.hint)}</small>` : ""}</li>`).join("")}</ul>`;
+  return `<ul class="diagnostic-list">${diagnostics
+    .map((item) => {
+      const location = item.sourcePath
+        ? `${item.sourcePath}${item.sourceRange ? `:${item.sourceRange.startLine}:${item.sourceRange.startColumn}` : ""}`
+        : "";
+      return `<li class="diagnostic diagnostic--${escapeHtml(item.severity)}"><div class="diagnostic-heading"><code>${escapeHtml(item.code)}</code>${location ? `<span class="diagnostic-location">${escapeHtml(location)}</span>` : ""}</div>${escapeHtml(item.message)}${item.hint ? `<br><small>${escapeHtml(item.hint)}</small>` : ""}</li>`;
+    })
+    .join("")}</ul>`;
 }
 
-function arraySummary(items, formatter) {
-  if (!items?.length) return "None";
-  return items.map(formatter).join("\n");
-}
-
-function reviewMetadata(metadata) {
-  return Object.fromEntries(
-    Object.entries(metadata || {}).filter(
-      ([key]) => !["publishedAt", "updatedAt", "lastReviewedAt"].includes(key),
-    ),
-  );
+export function publicationDiagnostics(detail, row) {
+  const diagnostics = [
+    ...(detail.working?.diagnostics ?? []),
+    ...(detail.diagnostics ?? []),
+    ...(row?.diagnostics ?? []),
+  ];
+  const seen = new Set();
+  return diagnostics.filter((item) => {
+    const range = item.sourceRange;
+    const key = [
+      item.severity,
+      item.code,
+      item.message,
+      item.hint,
+      item.sourcePath,
+      range?.startLine,
+      range?.startColumn,
+      range?.endLine,
+      range?.endColumn,
+    ].join("\u0000");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function sourceReviewSection(sources, sourceMode) {
@@ -109,39 +131,6 @@ function sourceReviewSection(sources, sourceMode) {
   </section>`;
 }
 
-function buildDiff(working, approved) {
-  const sections = [
-    [
-      "01 / Metadata",
-      JSON.stringify(reviewMetadata(working?.metadata), null, 2),
-      approved
-        ? JSON.stringify(reviewMetadata(approved.metadata), null, 2)
-        : "No approved revision",
-    ],
-    [
-      "02 / Public Markdown",
-      working?.markdown || "Empty",
-      approved?.markdown || "No approved revision",
-    ],
-    [
-      "03 / Outgoing links",
-      arraySummary(working?.outgoingLinks, (link) => `${link.title} → ${link.slug}`),
-      arraySummary(approved?.outgoingLinks, (link) => `${link.title} → ${link.slug}`),
-    ],
-    [
-      "04 / Assets",
-      arraySummary(working?.assets, (asset) => `${asset.publicPath}  ${asset.hash}`),
-      arraySummary(approved?.assets, (asset) => `${asset.publicPath}  ${asset.hash}`),
-    ],
-  ];
-  return sections
-    .map(
-      ([label, current, previous]) =>
-        `── ${label} ──\nWORKING\n${current}\n\nAPPROVED\n${previous}`,
-    )
-    .join("\n\n");
-}
-
 export function renderDetail(container, detail, row) {
   const working = detail.working;
   const approved = detail.approved;
@@ -153,7 +142,7 @@ export function renderDetail(container, detail, row) {
     "Inspect the exact public content, links, and assets before approval.";
   const exposureHash = working?.exposureHash || row?.exposureHash || "";
   const approvedHash = approved?.exposureHash || row?.approvedHash || "";
-  const diagnostics = working?.diagnostics || detail.diagnostics || row?.diagnostics || [];
+  const diagnostics = publicationDiagnostics(detail, row);
   container.innerHTML = `<header class="detail-header">
     <button class="button button--quiet mobile-back" id="back-button" type="button">Back to queue</button>
     <div class="title-actions"><div><span class="kicker">${escapeHtml(row?.kind || working?.metadata?.kind || "publication")} / ${escapeHtml(row?.status || working?.workflowStatus || "review")}</span><h1>${escapeHtml(title)}</h1></div>
@@ -169,7 +158,7 @@ export function renderDetail(container, detail, row) {
       ? `<section class="review-section"><div class="section-heading"><div><span class="kicker">Public surface</span><h2>Preview & four-part diff</h2></div></div>
     <div class="tab-strip" role="tablist" aria-label="Review mode"><button role="tab" id="preview-tab" aria-selected="true" aria-controls="preview-panel" tabindex="0">Working preview</button><button role="tab" id="approved-tab" aria-selected="false" aria-controls="preview-panel" tabindex="-1">Approved preview</button><button role="tab" id="diff-tab" aria-selected="false" aria-controls="diff-panel" tabindex="-1">Four-part diff</button></div>
     <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab"><iframe class="preview-frame" id="preview-frame" title="Sandboxed public working preview" sandbox></iframe></div>
-    <pre class="diff-view" id="diff-panel" role="tabpanel" aria-labelledby="diff-tab" hidden>${escapeHtml(buildDiff(working, approved))}</pre>
+    <div id="diff-panel" role="tabpanel" aria-labelledby="diff-tab" hidden>${renderPublicationDiff(working, approved)}</div>
   </section>`
       : ""
   }

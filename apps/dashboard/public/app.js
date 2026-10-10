@@ -9,6 +9,7 @@ import { initializeMetadataEditor } from "/metadata.js";
 import { createPreviewLoader } from "/preview-loader.js";
 import { initializeReleaseBuild } from "/release.js";
 import {
+  publicationDiagnostics,
   renderDetail,
   renderDiagnosticRail,
   renderQueue,
@@ -113,10 +114,7 @@ async function selectPublication(publicId) {
     state.detail = detail;
     const row = state.publications.find((item) => item.publicId === publicId);
     renderDetail(elements.detail, detail, row);
-    renderDiagnosticRail(
-      elements.diagnosticRail,
-      detail.working?.diagnostics || detail.diagnostics || row?.diagnostics || [],
-    );
+    renderDiagnosticRail(elements.diagnosticRail, publicationDiagnostics(detail, row));
     if (detail.working) await loadPreview("working");
     if (version !== selectionVersion) return;
     elements.shell.dataset.mobileView = "detail";
