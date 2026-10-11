@@ -2,6 +2,10 @@ node_modules/
 .codegraph/
 .omo/
 .local/
+.playwright-mcp/
+.artifacts/
+/docs/VERIFICATION.md
+/docs/STATUS.md
 build/
 dist/
 coverage/
