@@ -4,7 +4,6 @@
 - Recorded in this repository: 2026-09-22.
 - Format: English requirements digest of the original Korean 47-section design, not a verbatim archival copy. Section numbers are retained for traceability; repeated examples and draft type declarations are condensed.
 - This document describes the **target**, not a declaration that everything is implemented.
-- Current progress, differences and outstanding work: [implementation status](docs/STATUS.md).
 - Current executable API contracts: [implementation contract](docs/IMPLEMENTATION.md).
 
 ## 1. Purpose

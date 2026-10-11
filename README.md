@@ -182,11 +182,9 @@ npm --prefix site run check
 Core modules live under `packages/`. CLI and dashboard share the application service under `packages/service`; the Astro renderer is intentionally independent under `site/`. Tests use temporary isolated vaults, never real private data.
 
 - [Original design requirements and phase roadmap](wikai.md)
-- [Current implementation status and remaining work](docs/STATUS.md)
 - [Implementation contracts](docs/IMPLEMENTATION.md)
 - [Security and operations](docs/SECURITY.md)
 - [Operations runbook](docs/OPERATIONS.md)
-- [Verification record and operating limits](docs/VERIFICATION.md)
 - [Dashboard design system](DESIGN.md)
 - [Public site design system](site/DESIGN.md)
 

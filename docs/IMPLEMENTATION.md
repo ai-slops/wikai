@@ -1,8 +1,8 @@
 # Wikai implementation contract
 
 The original v0.1 requirements and numbered phase roadmap are recorded in
-[`wikai.md`](../wikai.md). See [current implementation status](STATUS.md) for
-verified coverage and remaining differences; this contract is not a completion checklist.
+[`wikai.md`](../wikai.md). This contract describes current interfaces and safety boundaries,
+not a completion checklist or a session-specific verification record.
 
 All authored documentation is English. Preserve `.dim` byte-for-byte. Node 24 executes native TypeScript (erasable syntax only); `app/server.mjs` remains the DIM entrypoint. The dashboard binds to loopback by default, with explicit authenticated remote operation for DIM. Do not commit runtime vaults, state, credentials, generated staging, or dist.
 
