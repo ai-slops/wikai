@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TagListSchema } from "./tag.ts";
 
 export const KindSchema = z.enum(["work", "knowledge", "log", "page"]);
 export type PublicKind = z.infer<typeof KindSchema>;
@@ -111,7 +112,7 @@ const PublicSpecObjectSchema = z.strictObject({
   slug: z.string().optional(),
   title: z.string().optional(),
   summary: z.string().optional(),
-  tags: z.array(z.string()).default([]),
+  tags: TagListSchema.default([]),
   aliases: z.array(z.string()).default([]),
   listed: z.boolean().optional(),
   index: z.boolean().optional(),

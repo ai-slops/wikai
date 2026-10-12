@@ -62,7 +62,12 @@ export async function loadConfig(
   ]) {
     await safePath(parse(path).root, path);
   }
-  for (const root of [...config.assets.roots, ...config.publicViews.roots]) {
+  for (const root of [
+    ...config.assets.roots,
+    ...config.publicViews.roots,
+    ...(config.mdx?.componentRoots ?? ["public-components"]),
+    ...(config.mdx?.dataRoots ?? ["public-data"]),
+  ]) {
     if (isAbsolute(root))
       throw new PublisherError(
         "INVALID_CONFIG",

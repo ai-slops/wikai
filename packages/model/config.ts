@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isCanonicalPublicRoute } from "./routes.ts";
 
 const VisibilitySchema = z.strictObject({
   listed: z.boolean(),
@@ -10,11 +11,32 @@ const DirectoryDeploymentSchema = z.strictObject({
   type: z.literal("directory"),
   root: z.string().min(1),
 });
+const RendererCapabilitySchema = z.enum(["html", "markdown", "mdx-react-19", "sitemap"]);
+const RendererRouteSchema = z
+  .string()
+  .startsWith("/")
+  .min(1)
+  .refine(isCanonicalPublicRoute, "Renderer routes must be canonical");
+const RendererSchema = z.discriminatedUnion("profile", [
+  z.strictObject({
+    profile: z.literal("astro"),
+    protocolVersion: z.literal(1).default(1),
+  }),
+  z.strictObject({
+    profile: z.literal("docker"),
+    protocolVersion: z.literal(1),
+    image: z.string().min(1),
+    capabilities: z.array(RendererCapabilitySchema).min(1),
+    reservedRoutes: z.array(RendererRouteSchema).default([]),
+    requiredRoutes: z.array(RendererRouteSchema).default([]),
+    assetPrefixes: z.array(z.string().regex(/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$)).+\/$/u)).default([]),
+  }),
+]);
 export const ConfigSchema = z.strictObject({
   schemaVersion: z.literal(1).default(1),
   vault: z.strictObject({
     root: z.string(),
-    include: z.array(z.string()).default(["**/*.md"]),
+    include: z.array(z.string()).default(["**/*.md", "**/*.mdx"]),
     exclude: z
       .array(z.string())
       .default([
@@ -35,6 +57,25 @@ export const ConfigSchema = z.strictObject({
   publicViews: z
     .strictObject({ roots: z.array(z.string()).default(["public-views"]) })
     .default({ roots: ["public-views"] }),
+  mdx: z
+    .strictObject({
+      enabled: z.boolean().default(false),
+      componentRoots: z.array(z.string()).default(["public-components"]),
+      dataRoots: z.array(z.string()).default(["public-data"]),
+      image: z.string().min(1).default("wikai-mdx:local"),
+      maxProfileBytes: z
+        .number()
+        .int()
+        .positive()
+        .default(5 * 1024 * 1024),
+    })
+    .default({
+      enabled: false,
+      componentRoots: ["public-components"],
+      dataRoots: ["public-data"],
+      image: "wikai-mdx:local",
+      maxProfileBytes: 5 * 1024 * 1024,
+    }),
   assets: z
     .strictObject({
       roots: z.array(z.string()).default(["assets", "public-assets"]),
@@ -77,6 +118,7 @@ export const ConfigSchema = z.strictObject({
     })
     .optional(),
   deployments: z.record(DeploymentNameSchema, DirectoryDeploymentSchema).optional(),
+  renderer: RendererSchema.default({ profile: "astro", protocolVersion: 1 }),
   site: z.strictObject({
     sourceDir: z.string(),
     distDir: z.string(),
@@ -99,4 +141,8 @@ export const ConfigSchema = z.strictObject({
       page: { listed: false, index: true, feed: false },
     }),
 });
-export type PublisherConfig = z.infer<typeof ConfigSchema>;
+type ParsedPublisherConfig = z.infer<typeof ConfigSchema>;
+export type PublisherConfig = Omit<ParsedPublisherConfig, "mdx" | "renderer"> & {
+  readonly mdx?: ParsedPublisherConfig["mdx"];
+  readonly renderer?: ParsedPublisherConfig["renderer"];
+};

@@ -8,6 +8,15 @@ import {
 } from "./publication.ts";
 
 export {
+  type MdxFile,
+  MdxFileSchema,
+  type MdxSnapshot,
+  MdxSnapshotSchema,
+} from "./mdx.ts";
+
+import { MdxSnapshotSchema } from "./mdx.ts";
+
+export {
   ContentStateSchema,
   FrontmatterSchema,
   KindSchema,
@@ -27,6 +36,17 @@ export {
   SourceSelectionSchema,
   WorkSchema,
 } from "./publication.ts";
+export {
+  buildTagTree,
+  matchesTagQueries,
+  TagListSchema,
+  type TagMatchMode,
+  TagMatchModeSchema,
+  type TagPath,
+  TagPathSchema,
+  type TagTreeNode,
+  tagMatches,
+} from "./tag.ts";
 export const DiagnosticSchema = z.object({
   code: z.string(),
   severity: z.enum(["info", "warning", "error"]),
@@ -78,6 +98,7 @@ export const WorkingSchema = z.object({
   sources: z.array(SourceSchema),
   exposureHash: z.string(),
   diagnostics: z.array(DiagnosticSchema),
+  mdx: MdxSnapshotSchema.optional(),
 });
 export type WorkingPublication = z.infer<typeof WorkingSchema>;
 export const RevisionSchema = z.object({
@@ -90,6 +111,7 @@ export const RevisionSchema = z.object({
   outgoingLinks: z.array(LinkSchema),
   assets: z.array(AssetSchema),
   approvedAt: z.string(),
+  mdx: MdxSnapshotSchema.optional(),
 });
 export type ApprovedRevision = z.infer<typeof RevisionSchema>;
 export type PrivateDocument = {
@@ -99,6 +121,7 @@ export type PrivateDocument = {
   readonly body: string;
   readonly frontmatter: PrivateFrontmatter;
   readonly headings: readonly { readonly title: string; readonly id: string }[];
+  readonly format?: "markdown" | "mdx";
 };
 export type VaultSnapshot = {
   readonly documents: readonly PrivateDocument[];
@@ -122,7 +145,6 @@ export { ConfigSchema, type PublisherConfig } from "./config.ts";
 export {
   isCanonicalPublicRoute,
   isFixedPageRoute,
-  isRendererRoute,
   type PageLayout,
   publicRouteKey,
   routeMatchesKind,

@@ -8,6 +8,12 @@ publisher:
   cleanBuild: true
 publicViews:
   roots: [public-views]
+mdx:
+  enabled: false
+  componentRoots: [public-components]
+  dataRoots: [public-data]
+  image: wikai-mdx:local
+  maxProfileBytes: 5242880
 assets:
   roots: [assets, public-assets]
   maxFileBytes: 52428800
@@ -32,6 +38,9 @@ site:
   isolatedBuild: true
   network: disabled
   image: wikai-site:local
+renderer:
+  profile: astro
+  protocolVersion: 1
 deployments:
   local:
     type: directory
