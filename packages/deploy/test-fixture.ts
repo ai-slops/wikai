@@ -120,11 +120,12 @@ export async function createDeploymentFixture(): Promise<DeploymentFixture> {
   const destination = join(root, "deployed");
   const deployments = { production: { type: "directory", root: destination } } as const;
   await mkdir(config.publisher.releaseStagingDir, { recursive: true });
-  for (const name of ["publication-manifest.json", "redirects.json", "content-index.json"]) {
-    await writeFile(
-      join(config.publisher.releaseStagingDir, name),
-      JSON.stringify({ schemaVersion: 1, pages: [], redirects: [] }),
-    );
+  for (const [name, policy] of [
+    ["publication-manifest.json", { schemaVersion: 1, pages: [] }],
+    ["redirects.json", { schemaVersion: 1, redirects: [] }],
+    ["content-index.json", { schemaVersion: 1, pages: [] }],
+  ] as const) {
+    await writeFile(join(config.publisher.releaseStagingDir, name), JSON.stringify(policy));
   }
   await mkdir(config.site.distDir, { recursive: true });
   await writeAuditedDist(config, "first");

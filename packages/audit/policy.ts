@@ -1,25 +1,18 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import type {
-  Diagnostic,
-  PublicMetadata,
-  PublicRedirect,
-  PublisherConfig,
-} from "../model/index.ts";
+import type { Diagnostic, PublicMetadata, PublisherConfig } from "../model/index.ts";
 import { PersistedMetadataSchema, RedirectSchema } from "../model/index.ts";
+import { type RendererInput, RendererInputSchema, routeOutputPath } from "../renderer/index.ts";
+import { readOutputFile, type ValidatedOutputTree } from "./output-tree.ts";
 
-const StagingIndexSchema = z
-  .object({
-    pages: z.array(
-      z
-        .object({
-          assets: z.array(z.object({ publicPath: z.string(), hash: z.string() }).passthrough()),
-        })
-        .passthrough(),
-    ),
-  })
-  .passthrough();
+const StagingIndexSchema = z.looseObject({
+  pages: z.array(
+    z.looseObject({
+      assets: z.array(z.looseObject({ publicPath: z.string(), hash: z.string() })),
+    }),
+  ),
+});
 
 export type AuditPolicy = Readonly<{
   routes: ReadonlySet<string>;
@@ -27,6 +20,7 @@ export type AuditPolicy = Readonly<{
   approvedIds: ReadonlySet<string>;
   assets: ReadonlyMap<string, string>;
   diagnostics: readonly Diagnostic[];
+  rendererInput: RendererInput | null;
 }>;
 
 const diagnostic = (code: string, message: string): Diagnostic => ({
@@ -38,31 +32,37 @@ const pageInput = (value: unknown): unknown =>
   typeof value === "object" && value !== null && "pages" in value ? value.pages : undefined;
 const redirectInput = (value: unknown): unknown =>
   typeof value === "object" && value !== null && "redirects" in value ? value.redirects : undefined;
-const metadataRoute = (metadata: PublicMetadata): string =>
-  metadata.slug === "/" ? "index.html" : `${metadata.slug.slice(1)}/index.html`;
-const redirectRoute = (redirect: PublicRedirect): string =>
-  `${redirect.from.replace(/^\/+|\/+$/g, "")}/index.html`;
-
 export const readAuditPolicy = async (
-  root: string,
+  tree: ValidatedOutputTree,
   config: PublisherConfig,
 ): Promise<AuditPolicy> => {
   try {
-    const publicManifestRaw: unknown = JSON.parse(
-      await readFile(join(root, "publication-manifest.json"), "utf8"),
+    const publicManifestBytes = await readOutputFile(tree, "publication-manifest.json");
+    const publicRedirectsBytes = await readOutputFile(tree, "redirects.json");
+    const trustedManifestBytes = await readFile(
+      join(config.publisher.releaseStagingDir, "publication-manifest.json"),
     );
-    const publicRedirectsRaw: unknown = JSON.parse(
-      await readFile(join(root, "redirects.json"), "utf8"),
+    const trustedRedirectsBytes = await readFile(
+      join(config.publisher.releaseStagingDir, "redirects.json"),
     );
-    const trustedManifestRaw: unknown = JSON.parse(
-      await readFile(join(config.publisher.releaseStagingDir, "publication-manifest.json"), "utf8"),
-    );
-    const trustedRedirectsRaw: unknown = JSON.parse(
-      await readFile(join(config.publisher.releaseStagingDir, "redirects.json"), "utf8"),
-    );
+    const publicManifestRaw: unknown = JSON.parse(publicManifestBytes.toString("utf8"));
+    const publicRedirectsRaw: unknown = JSON.parse(publicRedirectsBytes.toString("utf8"));
+    const trustedManifestRaw: unknown = JSON.parse(trustedManifestBytes.toString("utf8"));
+    const trustedRedirectsRaw: unknown = JSON.parse(trustedRedirectsBytes.toString("utf8"));
     const stagingIndexRaw: unknown = JSON.parse(
       await readFile(join(config.publisher.releaseStagingDir, "content-index.json"), "utf8"),
     );
+    let rendererInput: RendererInput | null = null;
+    try {
+      rendererInput = RendererInputSchema.parse(
+        JSON.parse(
+          await readFile(join(config.publisher.releaseStagingDir, "renderer-input.json"), "utf8"),
+        ),
+      );
+    } catch (error) {
+      if (config.renderer?.profile === "docker") throw error;
+      if (!(error instanceof Error)) throw error;
+    }
     const publicManifest = PersistedMetadataSchema.array().safeParse(pageInput(publicManifestRaw));
     const publicRedirects = RedirectSchema.array().safeParse(redirectInput(publicRedirectsRaw));
     const manifest = PersistedMetadataSchema.array().safeParse(pageInput(trustedManifestRaw));
@@ -83,11 +83,12 @@ export const readAuditPolicy = async (
         diagnostics: [
           diagnostic("AUDIT_ROUTE_MANIFEST_INVALID", "Public route policy files are invalid"),
         ],
+        rendererInput,
       };
     }
     const diagnostics =
-      JSON.stringify(publicManifest.data) === JSON.stringify(manifest.data) &&
-      JSON.stringify(publicRedirects.data) === JSON.stringify(redirects.data)
+      publicManifestBytes.equals(trustedManifestBytes) &&
+      publicRedirectsBytes.equals(trustedRedirectsBytes)
         ? []
         : [
             diagnostic(
@@ -100,12 +101,22 @@ export const readAuditPolicy = async (
         page.assets.map((asset) => [asset.publicPath.replace(/^\/+/, ""), asset.hash] as const),
       ),
     );
+    for (const page of rendererInput?.pages ?? []) {
+      if (page.content.type !== "mdx") continue;
+      for (const artifact of [...page.content.scripts, ...page.content.styles]) {
+        assets.set(artifact.publicPath.replace(/^\/+/, ""), artifact.hash);
+      }
+    }
     return {
-      routes: new Set([...manifest.data.map(metadataRoute), ...redirects.data.map(redirectRoute)]),
+      routes: new Set([
+        ...manifest.data.map((page) => routeOutputPath(page.slug)),
+        ...redirects.data.map((redirect) => routeOutputPath(redirect.from)),
+      ]),
       pages: manifest.data,
       approvedIds: new Set(manifest.data.map((page) => page.id)),
       assets,
       diagnostics,
+      rendererInput,
     };
   } catch (error) {
     if (error instanceof Error)
@@ -115,6 +126,7 @@ export const readAuditPolicy = async (
         approvedIds: new Set(),
         assets: new Map(),
         diagnostics: [diagnostic("AUDIT_STAGING_INVALID", "Trusted staging policy cannot be read")],
+        rendererInput: null,
       };
     throw error;
   }

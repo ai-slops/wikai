@@ -1,9 +1,17 @@
-import { lstat, readdir, readFile } from "node:fs/promises";
-import { extname, join, relative, sep } from "node:path";
+import { extname } from "node:path";
 import { hash } from "../fs/index.ts";
 import type { Diagnostic, PublicMetadata, PublisherConfig, VaultSnapshot } from "../model/index.ts";
+import { resolveRendererProfile, routeOutputPath } from "../renderer/index.ts";
+import {
+  inspectOutputTree,
+  type OutputTreeInspection,
+  readOutputFile,
+  readOutputText,
+  type ValidatedOutputTree,
+} from "./output-tree.ts";
 import { readAuditPolicy } from "./policy.ts";
 import { privateMarkers, scanText } from "./privacy.ts";
+import { rendererOutputPolicy } from "./renderer-output.ts";
 
 const REQUIRED_FILES = [
   "index.html",
@@ -35,43 +43,12 @@ const CORE_ROUTE_SET: ReadonlySet<string> = new Set(
   REQUIRED_FILES.filter((file) => file.endsWith(".html")),
 );
 const TEXT_EXTENSIONS = new Set([".html", ".css", ".js", ".json", ".xml", ".txt"]);
-const ALLOWED_EXTENSIONS = new Set([
-  ...TEXT_EXTENSIONS,
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".webp",
-  ".avif",
-  ".gif",
-  ".ico",
-  ".woff",
-  ".woff2",
-]);
-
 const diagnostic = (code: string, message: string, sourcePath?: string): Diagnostic => ({
   code,
   severity: "error",
   message,
   ...(sourcePath === undefined ? {} : { sourcePath }),
 });
-
-const walk = async (root: string, current = root): Promise<readonly string[]> => {
-  const entries = await readdir(current, { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
-    const path = join(current, entry.name);
-    const info = await lstat(path);
-    if (info.isSymbolicLink()) files.push(path);
-    else if (info.isDirectory()) files.push(...(await walk(root, path)));
-    else files.push(path);
-  }
-  return files;
-};
-
-const normalizedRelative = (root: string, path: string): string =>
-  relative(root, path).split(sep).join("/");
-const metadataRoute = (metadata: PublicMetadata): string =>
-  metadata.slug === "/" ? "index.html" : `${metadata.slug.slice(1)}/index.html`;
 
 const hasNoindex = (html: string): boolean =>
   (html.match(/<meta\b[^>]*>/giu) ?? []).some(
@@ -81,13 +58,13 @@ const hasNoindex = (html: string): boolean =>
   );
 
 const indexPolicyDiagnostics = async (
-  root: string,
+  tree: ValidatedOutputTree,
   pages: readonly PublicMetadata[],
   siteUrl: string,
 ): Promise<readonly Diagnostic[]> => {
   let sitemap = "";
   try {
-    sitemap = await readFile(join(root, "sitemap-0.xml"), "utf8");
+    sitemap = await readOutputText(tree, "sitemap-0.xml");
   } catch (error) {
     if (!(error instanceof Error)) throw error;
   }
@@ -102,7 +79,7 @@ const indexPolicyDiagnostics = async (
         diagnostic(
           "AUDIT_SITEMAP_MISSING",
           "An indexed public route is missing from the sitemap",
-          metadataRoute(page),
+          routeOutputPath(page.slug),
         ),
       );
     if (!page.index && sitemapUrls.has(expectedUrl))
@@ -110,17 +87,18 @@ const indexPolicyDiagnostics = async (
         diagnostic(
           "AUDIT_SITEMAP_FORBIDDEN",
           "A noindex public route appears in the sitemap",
-          metadataRoute(page),
+          routeOutputPath(page.slug),
         ),
       );
     try {
-      const html = await readFile(join(root, metadataRoute(page)), "utf8");
+      const outputPath = routeOutputPath(page.slug);
+      const html = await readOutputText(tree, outputPath);
       if (hasNoindex(html) === page.index)
         diagnostics.push(
           diagnostic(
             "AUDIT_NOINDEX_MISMATCH",
             "Rendered robots policy differs from trusted metadata",
-            metadataRoute(page),
+            outputPath,
           ),
         );
     } catch (error) {
@@ -136,16 +114,27 @@ export const auditDist = async (
   vault?: VaultSnapshot,
 ): Promise<Diagnostic[]> => {
   const diagnostics: Diagnostic[] = [];
-  let files: readonly string[];
+  let inspection: OutputTreeInspection;
   try {
-    files = await walk(path);
+    inspection = await inspectOutputTree(path);
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT")
       return [diagnostic("AUDIT_DIST_MISSING", "Distribution directory does not exist", path)];
     throw error;
   }
-  const relativeFiles = new Set(files.map((file) => normalizedRelative(path, file)));
-  for (const required of REQUIRED_FILES)
+  if (!inspection.valid) return [...inspection.diagnostics];
+  const { tree } = inspection;
+  const { files, relativeFiles } = tree;
+  const profile = resolveRendererProfile(config);
+  const requiredFiles = profile.legacyOutput
+    ? REQUIRED_FILES
+    : [
+        ...profile.requiredRoutes.map(routeOutputPath),
+        "publication-manifest.json",
+        "redirects.json",
+        "renderer-output.json",
+      ];
+  for (const required of requiredFiles)
     if (!relativeFiles.has(required))
       diagnostics.push(
         diagnostic(
@@ -153,8 +142,14 @@ export const auditDist = async (
           `Required public output is missing: ${required}`,
         ),
       );
-  const policy = await readAuditPolicy(path, config);
+  const policy = await readAuditPolicy(tree, config);
   diagnostics.push(...policy.diagnostics);
+  const outputPolicy = await rendererOutputPolicy({
+    tree,
+    config,
+    policy,
+  });
+  diagnostics.push(...outputPolicy.diagnostics);
   for (const route of policy.routes)
     if (!relativeFiles.has(route))
       diagnostics.push(
@@ -173,8 +168,13 @@ export const auditDist = async (
           asset,
         ),
       );
-  diagnostics.push(...(await indexPolicyDiagnostics(path, policy.pages, config.site.url)));
-  const allowedRoutes = new Set([...CORE_ROUTE_SET, ...policy.routes]);
+  if (profile.capabilities.includes("sitemap")) {
+    diagnostics.push(...(await indexPolicyDiagnostics(tree, policy.pages, config.site.url)));
+  }
+  const allowedRoutes =
+    profile.legacyOutput && outputPolicy.legacy
+      ? new Set([...CORE_ROUTE_SET, ...policy.routes])
+      : outputPolicy.routeFiles;
   for (const file of relativeFiles)
     if (file.endsWith(".html") && !allowedRoutes.has(file))
       diagnostics.push(
@@ -185,28 +185,19 @@ export const auditDist = async (
         ),
       );
   const markers = privateMarkers(config, vault, new Set(policy.pages.map((page) => page.title)));
-  for (const file of files) {
-    const relativePath = normalizedRelative(path, file);
+  for (const relativePath of files) {
     diagnostics.push(...scanText(relativePath, relativePath, config, markers, policy.approvedIds));
-    const info = await lstat(file);
-    if (info.isSymbolicLink()) {
-      diagnostics.push(
-        diagnostic("AUDIT_SYMLINK", "Distribution contains a symbolic link", relativePath),
-      );
-      continue;
-    }
     const extension = extname(relativePath).toLowerCase();
     if (relativePath.endsWith(".map"))
       diagnostics.push(
         diagnostic("AUDIT_SOURCE_MAP", "Source maps are forbidden in public output", relativePath),
       );
-    const generatedAsset = relativePath.startsWith("_assets/") && ALLOWED_EXTENSIONS.has(extension);
     const declaredAsset = policy.assets.has(relativePath);
     if (
-      !FIXED_FILE_SET.has(relativePath) &&
+      !(profile.legacyOutput && FIXED_FILE_SET.has(relativePath)) &&
       !allowedRoutes.has(relativePath) &&
-      !generatedAsset &&
-      !declaredAsset
+      !declaredAsset &&
+      !outputPolicy.allowedFiles.has(relativePath)
     )
       diagnostics.push(
         diagnostic(
@@ -217,7 +208,10 @@ export const auditDist = async (
       );
     if (declaredAsset) {
       const expectedHash = policy.assets.get(relativePath);
-      if (expectedHash !== undefined && hash(await readFile(file)) !== expectedHash)
+      if (
+        expectedHash !== undefined &&
+        hash(await readOutputFile(tree, relativePath)) !== expectedHash
+      )
         diagnostics.push(
           diagnostic(
             "AUDIT_ASSET_HASH_MISMATCH",
@@ -228,7 +222,13 @@ export const auditDist = async (
     }
     if (!TEXT_EXTENSIONS.has(extension)) continue;
     diagnostics.push(
-      ...scanText(await readFile(file, "utf8"), relativePath, config, markers, policy.approvedIds),
+      ...scanText(
+        await readOutputText(tree, relativePath),
+        relativePath,
+        config,
+        markers,
+        policy.approvedIds,
+      ),
     );
   }
   return diagnostics;
