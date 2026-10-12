@@ -1,5 +1,6 @@
 import { hash } from "../fs/index.ts";
 import { compileMarkdown, type LinkTarget, type VaultLinkTarget } from "../markdown/index.ts";
+import { compileMdx, compileMdxReferences, type MdxCompiler } from "../mdx/index.ts";
 import type { PrivateDocument, PublisherConfig, WorkingPublication } from "../model/index.ts";
 import { CompilerError, exposureMetadata, metadataFor } from "./metadata.ts";
 import { publicationPrivacyDiagnostics } from "./privacy.ts";
@@ -16,24 +17,34 @@ export type CompileContext = {
   readonly config: PublisherConfig;
   readonly approved: readonly LinkTarget[];
   readonly vaultTargets: readonly VaultLinkTarget[];
+  readonly mdxCompiler?: MdxCompiler;
 };
 
 const containsDeniedValue = (
-  publication: Pick<WorkingPublication, "metadata" | "markdown" | "html" | "assets">,
+  publication: Pick<WorkingPublication, "metadata" | "markdown" | "html" | "assets" | "mdx">,
   patterns: readonly string[],
 ): boolean => {
   const visible = `${JSON.stringify(publication.metadata)}\n${publication.markdown}\n${publication.html}`;
   const assetText = publication.assets.map((asset) =>
     Buffer.from(asset.data, "base64").toString("utf8"),
   );
+  const mdxText = publication.mdx
+    ? [
+        ...publication.mdx.dependencies,
+        publication.mdx.artifact.html,
+        ...publication.mdx.artifact.scripts,
+        ...publication.mdx.artifact.styles,
+      ].map((file) => Buffer.from(file.data, "base64").toString("utf8"))
+    : [];
+  const exposedText = [...assetText, ...mdxText];
   if (
     /\bprv_[A-Za-z0-9_-]+\b/u.test(visible) ||
-    assetText.some((value) => /\bprv_[A-Za-z0-9_-]+\b/u.test(value))
+    exposedText.some((value) => /\bprv_[A-Za-z0-9_-]+\b/u.test(value))
   )
     return true;
   if (
     CREDENTIAL_PATTERNS.some(
-      (pattern) => pattern.test(visible) || assetText.some((value) => pattern.test(value)),
+      (pattern) => pattern.test(visible) || exposedText.some((value) => pattern.test(value)),
     )
   )
     return true;
@@ -47,7 +58,7 @@ const containsDeniedValue = (
       throw error;
     }
     if (matcher.test(visible)) return true;
-    if (assetText.some((value) => matcher.test(value))) return true;
+    if (exposedText.some((value) => matcher.test(value))) return true;
   }
   return false;
 };
@@ -64,26 +75,56 @@ export const compileDocument = async (
     throw new CompilerError("PUBLIC_BODY_REQUIRED", "Publication body is required");
   const metadata = metadataFor(document, context.config);
   const self = selfTarget(document, metadata);
-  const transformed = await compileMarkdown({
-    body: document.body,
-    sourcePath: document.sourcePath,
-    config: context.config,
-    targets: [...context.approved.filter((target) => target.publicId !== self.publicId), self],
-    vaultTargets: context.vaultTargets,
-    self,
-  });
+  const targets = [...context.approved.filter((target) => target.publicId !== self.publicId), self];
+  const rendered =
+    document.format === "mdx"
+      ? await (async () => {
+          const references = await compileMdxReferences({
+            body: document.body,
+            sourcePath: document.sourcePath,
+            config: context.config,
+            targets,
+            vaultTargets: context.vaultTargets,
+            self,
+          });
+          const mdx = await (context.mdxCompiler ?? compileMdx)({
+            body: references.body,
+            sourcePath: document.sourcePath,
+            config: context.config,
+          });
+          return {
+            kind: "mdx" as const,
+            markdown: references.body,
+            html: Buffer.from(mdx.artifact.html.data, "base64").toString("utf8"),
+            outgoingLinks: references.outgoingLinks,
+            assets: references.assets,
+            mdx,
+          };
+        })()
+      : {
+          kind: "markdown" as const,
+          ...(await compileMarkdown({
+            body: document.body,
+            sourcePath: document.sourcePath,
+            config: context.config,
+            targets,
+            vaultTargets: context.vaultTargets,
+            self,
+          })),
+        };
   const exposureHash = hash(
     JSON.stringify({
       metadata: exposureMetadata(metadata),
-      markdown: transformed.markdown,
-      html: transformed.html,
-      outgoingLinks: transformed.outgoingLinks,
-      assets: transformed.assets.map(({ publicPath, hash: assetHash, mime, bytes }) => ({
+      markdown: rendered.markdown,
+      html: rendered.html,
+      outgoingLinks: rendered.outgoingLinks,
+      assets: rendered.assets.map(({ publicPath, hash: assetHash, mime, bytes }) => ({
         publicPath,
         hash: assetHash,
         mime,
         bytes,
       })),
+      ...(rendered.kind === "mdx" ? { mdx: rendered.mdx } : {}),
     }),
   );
   const publication: WorkingPublication = {
@@ -94,13 +135,14 @@ export const compileDocument = async (
     sourceMode: spec.mode,
     workflowStatus: spec.status,
     metadata,
-    markdown: transformed.markdown,
-    html: transformed.html,
-    outgoingLinks: [...transformed.outgoingLinks],
-    assets: [...transformed.assets],
+    markdown: rendered.markdown,
+    html: rendered.html,
+    outgoingLinks: [...rendered.outgoingLinks],
+    assets: [...rendered.assets],
     sources: spec.sources,
     exposureHash,
     diagnostics: [],
+    ...(rendered.kind === "mdx" ? { mdx: rendered.mdx } : {}),
   };
   if (containsDeniedValue(publication, context.config.security.denyPatterns))
     throw new CompilerError(

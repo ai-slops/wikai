@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { atomicWrite, hash, readOptional, safePath } from "../fs/index.ts";
 import type { ApprovedRevision, WorkingPublication } from "../model/index.ts";
-import { PublisherError } from "../model/index.ts";
+import { MdxSnapshotSchema, PublisherError } from "../model/index.ts";
 import { type StoredRevision, StoredRevisionSchema } from "./schema.ts";
 
 const RevisionIntegritySchema = z.looseObject({
@@ -17,6 +17,7 @@ const RevisionIntegritySchema = z.looseObject({
   assets: z.array(z.unknown()),
   approvedAt: z.string(),
   integrityHash: z.string(),
+  mdx: MdxSnapshotSchema.optional(),
 });
 
 type RevisionContentInput = {
@@ -27,6 +28,7 @@ type RevisionContentInput = {
   readonly html: string;
   readonly outgoingLinks: readonly unknown[];
   readonly assets: readonly unknown[];
+  readonly mdx?: WorkingPublication["mdx"];
 };
 
 function canonicalJson(value: unknown): string {
@@ -61,6 +63,7 @@ function canonicalRevisionContent(revision: RevisionContentInput): string {
     html: revision.html,
     outgoingLinks: revision.outgoingLinks,
     assets: revision.assets,
+    ...(revision.mdx === undefined ? {} : { mdx: revision.mdx }),
   });
 }
 
@@ -88,6 +91,7 @@ export function createRevision(
     outgoingLinks: working.outgoingLinks,
     assets: working.assets,
     approvedAt,
+    ...(working.mdx === undefined ? {} : { mdx: working.mdx }),
   };
   const revisionHash = hash(revisionContent(draft));
   const revision = { ...draft, revisionHash };

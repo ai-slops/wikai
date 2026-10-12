@@ -1,5 +1,7 @@
 import { MarkdownError } from "../markdown/index.ts";
 import { shiftSourceRange } from "../markdown/source-range.ts";
+import type { MdxCompiler } from "../mdx/index.ts";
+import { MdxError } from "../mdx/index.ts";
 import type {
   ApprovedRevision,
   Diagnostic,
@@ -82,11 +84,17 @@ export const compile = async (
   vault: VaultSnapshot,
   config: PublisherConfig,
   approvedRevisions: readonly ApprovedRevision[] = [],
+  mdxCompiler?: MdxCompiler,
 ): Promise<PublicationPlan> => {
   const diagnostics: Diagnostic[] = [...vault.diagnostics];
   const publications: WorkingPublication[] = [];
   const approved = approvedRevisions.map(approvedTarget);
-  const context = { config, approved, vaultTargets: buildVaultTargets(vault.documents, approved) };
+  const context = {
+    config,
+    approved,
+    vaultTargets: buildVaultTargets(vault.documents, approved),
+    ...(mdxCompiler === undefined ? {} : { mdxCompiler }),
+  };
   for (const document of vault.documents) {
     if (!document.frontmatter.public) continue;
     try {
@@ -132,7 +140,7 @@ export const compile = async (
                 ),
           ),
         );
-      else if (error instanceof CompilerError)
+      else if (error instanceof CompilerError || error instanceof MdxError)
         diagnostics.push(errorDiagnostic(error.code, error.message, document));
       else if (error instanceof Error)
         diagnostics.push(

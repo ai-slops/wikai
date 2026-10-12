@@ -2,7 +2,6 @@ import GithubSlugger from "github-slugger";
 import {
   isCanonicalPublicRoute,
   isFixedPageRoute,
-  isRendererRoute,
   MetadataSchema,
   type PrivateDocument,
   type PublicMetadata,
@@ -10,6 +9,7 @@ import {
   type PublisherConfig,
   routeMatchesKind,
 } from "../model/index.ts";
+import { resolveRendererProfile } from "../renderer/index.ts";
 
 export class CompilerError extends Error {
   readonly code: string;
@@ -123,15 +123,25 @@ export const metadataFor = (document: PrivateDocument, config: PublisherConfig):
     (spec.kind === "log" ? spec.log?.occurredAt : undefined);
   if (!title) throw new CompilerError("PUBLIC_TITLE_MISSING", "Public title is required");
   const slug = slugFor(title, spec);
-  if (isRendererRoute(slug))
+  const renderer = resolveRendererProfile(config);
+  const reservedRoutes = new Set(
+    renderer.reservedRoutes.map((route) => route.toLocaleLowerCase("en-US")),
+  );
+  if (reservedRoutes.has(slug.toLocaleLowerCase("en-US")))
     throw new CompilerError("PUBLIC_ROUTE_RESERVED", "Public path is owned by the renderer");
-  if (!routeMatchesKind(slug, spec.kind, spec.page?.layout))
+  if (renderer.name === "astro" && !routeMatchesKind(slug, spec.kind, spec.page?.layout))
     throw new CompilerError(
       "PUBLIC_ROUTE_KIND_MISMATCH",
       "Public path does not match its content kind or page layout",
     );
   const aliases = spec.aliases.map(validatePublicPath);
-  if (aliases.some((alias) => isRendererRoute(alias) || isFixedPageRoute(alias)))
+  if (
+    aliases.some(
+      (alias) =>
+        reservedRoutes.has(alias.toLocaleLowerCase("en-US")) ||
+        (renderer.name === "astro" && isFixedPageRoute(alias)),
+    )
+  )
     throw new CompilerError("PUBLIC_ROUTE_RESERVED", "Public alias is reserved");
   const defaults = config.defaults[spec.kind];
   const work = spec.work

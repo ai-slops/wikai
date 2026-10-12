@@ -1,0 +1,9 @@
+*
+!package.json
+!package-lock.json
+!packages/
+packages/*
+!packages/mdx/
+packages/mdx/*
+!packages/mdx/image/
+!packages/mdx/image/**

@@ -1,5 +1,5 @@
 import { lstat, readdir, readFile, realpath } from "node:fs/promises";
-import { relative, resolve, sep } from "node:path";
+import { extname, relative, resolve, sep } from "node:path";
 import GithubSlugger from "github-slugger";
 import type { Heading, Root } from "mdast";
 import { toString as mdastToString } from "mdast-util-to-string";
@@ -139,7 +139,15 @@ const parseSource = (raw: string, sourcePath: string): PrivateDocument => {
     const title = mdastToString(node);
     headings.push({ title, id: slugger.slug(title) });
   });
-  return { sourcePath, sourceHash: hash(raw), raw, body, frontmatter: parsed.data, headings };
+  return {
+    sourcePath,
+    sourceHash: hash(raw),
+    raw,
+    body,
+    frontmatter: parsed.data,
+    headings,
+    format: extname(sourcePath).toLowerCase() === ".mdx" ? "mdx" : "markdown",
+  };
 };
 
 export const loadVault = async (config: PublisherConfig): Promise<VaultSnapshot> => {
@@ -153,6 +161,7 @@ export const loadVault = async (config: PublisherConfig): Promise<VaultSnapshot>
   const documents: PrivateDocument[] = [];
   const diagnostics = [...discovered.diagnostics];
   for (const sourcePath of discovered.paths) {
+    if (sourcePath.toLowerCase().endsWith(".mdx") && !config.mdx?.enabled) continue;
     const raw = await readFile(resolve(root, sourcePath), "utf8");
     try {
       documents.push(parseSource(raw, sourcePath));
