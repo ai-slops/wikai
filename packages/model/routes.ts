@@ -1,4 +1,4 @@
-import type { PublicKind } from "./index.ts";
+import type { PublicKind } from "./publication.ts";
 
 export type PageLayout = "home" | "about" | "now" | "contact" | "generic";
 
@@ -8,29 +8,6 @@ const FIXED_PAGE_ROUTES = {
   now: "/now",
   contact: "/contact",
 } as const;
-
-const RENDERER_ROUTES = new Set(
-  [
-    "/work",
-    "/knowledge",
-    "/log",
-    "/search",
-    "/feeds",
-    "/feed.xml",
-    "/work.xml",
-    "/knowledge.xml",
-    "/log.xml",
-    "/feeds/all.xml",
-    "/feeds/work.xml",
-    "/feeds/knowledge.xml",
-    "/feeds/log.xml",
-    "/robots.txt",
-    "/sitemap-index.xml",
-    "/sitemap-0.xml",
-    "/publication-manifest.json",
-    "/redirects.json",
-  ].map((route) => route.toLocaleLowerCase("en-US")),
-);
 
 export const publicRouteKey = (route: string): string =>
   route.normalize("NFC").toLocaleLowerCase("en-US");
@@ -57,9 +34,6 @@ export const isCanonicalPublicRoute = (route: string): boolean => {
     throw error;
   }
 };
-
-export const isRendererRoute = (route: string): boolean =>
-  RENDERER_ROUTES.has(publicRouteKey(route));
 
 export const isFixedPageRoute = (route: string): boolean =>
   Object.values(FIXED_PAGE_ROUTES).some((fixed) => publicRouteKey(fixed) === publicRouteKey(route));

@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fingerprintDirectory } from "../deploy/filesystem.ts";
 import { replaceDirectory } from "../fs/index.ts";
 import type { PublisherConfig, VaultSnapshot } from "../model/index.ts";
+import { resolveRendererProfile } from "../renderer/index.ts";
 import { ReleaseError } from "./error.ts";
 import {
   directoryFingerprintHash,
@@ -21,7 +22,7 @@ export type SandboxSpec = Readonly<{
 export const createSandboxSpec = (
   config: PublisherConfig,
   name: string,
-  image = config.site.image,
+  image = resolveRendererProfile(config).image,
   distVolume = `${name}-dist`,
 ): SandboxSpec => {
   if (!config.site.isolatedBuild || config.site.network !== "disabled")
@@ -29,6 +30,7 @@ export const createSandboxSpec = (
       "RELEASE_SANDBOX_REQUIRED",
       "Release rendering requires the isolated network-disabled site configuration",
     );
+  const profile = resolveRendererProfile(config);
   const createArgs = [
     "create",
     "--name",
@@ -57,7 +59,10 @@ export const createSandboxSpec = (
     "--env",
     `WIKAI_SITE_URL=${config.site.url}`,
     "--env",
-    "ASTRO_TELEMETRY_DISABLED=1",
+    "WIKAI_RENDERER_INPUT=/staging/renderer-input.json",
+    "--env",
+    "WIKAI_RENDERER_OUTPUT=/dist/renderer-output.json",
+    ...(profile.name === "astro" ? ["--env", "ASTRO_TELEMETRY_DISABLED=1"] : []),
     "--env",
     "HOME=/tmp",
     image,
@@ -138,6 +143,7 @@ export const buildSite = async (
   const exportContainer = `${name}-export`;
   const distVolume = `${name}-dist`;
   const runtimeImage = `${name}:staged`;
+  const profile = resolveRendererProfile(config);
   const spec = createSandboxSpec(config, name, runtimeImage, distVolume);
   await mkdir(dirname(config.site.distDir), { recursive: true });
   const temporary = await mkdtemp(join(dirname(config.site.distDir), ".site-dist-"));
@@ -162,7 +168,7 @@ export const buildSite = async (
         "Release staging changed after its private identity was recorded",
       );
     }
-    await docker(["create", "--name", stagingContainer, config.site.image]);
+    await docker(["create", "--name", stagingContainer, profile.image]);
     stagingCreated = true;
     await docker(["cp", `${staging}/.`, `${stagingContainer}:${spec.stagingPath}`]);
     await docker(["commit", stagingContainer, runtimeImage]);
@@ -179,7 +185,7 @@ export const buildSite = async (
         "RELEASE_BUILD_FAILED",
         `Isolated site renderer exited with code ${exitCode}`,
       );
-    await docker(createExportSpec(exportContainer, distVolume, config.site.image));
+    await docker(createExportSpec(exportContainer, distVolume, profile.image));
     exporterCreated = true;
     await mkdir(rendered);
     await docker(["start", exportContainer]);
@@ -196,11 +202,13 @@ export const buildSite = async (
         "RELEASE_AUDIT_FAILED",
         `Rendered output failed the privacy audit: ${errors.map((diagnostic) => diagnostic.code).join(", ")}`,
       );
+    await replaceDirectory(rendered, config.site.distDir);
     await writeReleaseReceipt(config.publisher.stateDir, {
       ...identity,
-      distFingerprintHash: directoryFingerprintHash(await fingerprintDirectory(rendered)),
+      distFingerprintHash: directoryFingerprintHash(
+        await fingerprintDirectory(config.site.distDir),
+      ),
     });
-    await replaceDirectory(rendered, config.site.distDir);
     await rm(temporary, { recursive: true, force: true });
     return { distPath: config.site.distDir };
   } catch (error) {

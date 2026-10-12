@@ -1,11 +1,11 @@
-import type { ApprovedRevision, PublicRedirect } from "../model/index.ts";
+import type { ApprovedRevision, PublicRedirect, PublisherConfig } from "../model/index.ts";
 import {
   isCanonicalPublicRoute,
   isFixedPageRoute,
-  isRendererRoute,
   publicRouteKey,
   routeMatchesKind,
 } from "../model/index.ts";
+import { astroCategoryRoutes, resolveRendererProfile } from "../renderer/index.ts";
 import { ReleaseError } from "./error.ts";
 
 const validateRoute = (route: string): void => {
@@ -19,7 +19,15 @@ const validateRoute = (route: string): void => {
 export const validateReleaseGraph = (
   approved: readonly ApprovedRevision[],
   redirects: readonly PublicRedirect[],
+  config: PublisherConfig,
 ): void => {
+  const profile = resolveRendererProfile(config);
+  const reservedRoutes = new Set(profile.reservedRoutes.map(publicRouteKey));
+  const derivedRoutes = new Set(
+    profile.name === "astro"
+      ? astroCategoryRoutes(approved.map(({ metadata }) => ({ metadata }))).map(publicRouteKey)
+      : [],
+  );
   const byId = new Map(approved.map((revision) => [revision.publicId, revision]));
   const routes = new Map<string, string>();
   const canonicalRoutes = new Map<string, ApprovedRevision>();
@@ -31,12 +39,14 @@ export const validateReleaseGraph = (
   for (const revision of approved) {
     validateRoute(revision.metadata.slug);
     if (
-      isRendererRoute(revision.metadata.slug) ||
-      !routeMatchesKind(
-        revision.metadata.slug,
-        revision.metadata.kind,
-        revision.metadata.page?.layout,
-      )
+      reservedRoutes.has(publicRouteKey(revision.metadata.slug)) ||
+      derivedRoutes.has(publicRouteKey(revision.metadata.slug)) ||
+      (profile.name === "astro" &&
+        !routeMatchesKind(
+          revision.metadata.slug,
+          revision.metadata.kind,
+          revision.metadata.page?.layout,
+        ))
     )
       throw new ReleaseError(
         "RELEASE_INVALID_ROUTE",
@@ -53,7 +63,11 @@ export const validateReleaseGraph = (
     for (const alias of revision.metadata.aliases) {
       validateRoute(alias);
       const aliasKey = publicRouteKey(alias);
-      if (isRendererRoute(alias) || isFixedPageRoute(alias))
+      if (
+        reservedRoutes.has(aliasKey) ||
+        derivedRoutes.has(aliasKey) ||
+        (profile.name === "astro" && isFixedPageRoute(alias))
+      )
         throw new ReleaseError("RELEASE_INVALID_ROUTE", "A public alias is reserved");
       if (routes.has(aliasKey))
         throw new ReleaseError(
@@ -82,8 +96,8 @@ export const validateReleaseGraph = (
       existingOwner === target.publicId &&
       target.metadata.aliases.some((alias) => publicRouteKey(alias) === fromKey);
     if (
-      isRendererRoute(redirect.from) ||
-      isFixedPageRoute(redirect.from) ||
+      reservedRoutes.has(fromKey) ||
+      (profile.name === "astro" && isFixedPageRoute(redirect.from)) ||
       target === undefined ||
       (existingOwner !== undefined && !isDeclaredAlias)
     )

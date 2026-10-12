@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { atomicWrite, replaceDirectory, safePath } from "../fs/index.ts";
+import { atomicWrite, hash, replaceDirectory, safePath } from "../fs/index.ts";
 import type {
   ApprovedRevision,
   MaterializedAsset,
@@ -8,6 +8,7 @@ import type {
   PublisherConfig,
   ReleaseManifest,
 } from "../model/index.ts";
+import { resolveRendererProfile } from "../renderer/index.ts";
 import { ReleaseError } from "./error.ts";
 import {
   redirectsPolicyHash,
@@ -15,6 +16,7 @@ import {
   revisionsForRelease,
   writeReleaseIdentity,
 } from "./receipt.ts";
+import { createRendererInput } from "./renderer-input.ts";
 import { validateReleaseGraph } from "./routes.ts";
 
 export { buildSite, createExportSpec, createSandboxSpec, type SandboxSpec } from "./site-build.ts";
@@ -113,8 +115,15 @@ const materializeAssets = async (
         throw new ReleaseError("RELEASE_ASSET_COLLISION", `Conflicting public asset: ${relative}`);
       if (existing !== undefined) continue;
       const output = await safePath(root, relative);
+      const data = Buffer.from(asset.data, "base64");
+      if (data.byteLength !== asset.bytes || hash(data) !== asset.hash) {
+        throw new ReleaseError(
+          "RELEASE_ASSET_INTEGRITY",
+          "Approved public asset bytes do not match their descriptor",
+        );
+      }
       await mkdir(dirname(output), { recursive: true });
-      await atomicWrite(output, Buffer.from(asset.data, "base64"));
+      await atomicWrite(output, data);
       seen.set(relative, asset.hash);
     }
   }
@@ -125,7 +134,7 @@ export const buildReleaseStaging = async (
   config: PublisherConfig,
   redirects: readonly { readonly from: string; readonly to: string; readonly status: 301 }[] = [],
 ): Promise<ReleaseManifest> => {
-  validateReleaseGraph(approved, redirects);
+  validateReleaseGraph(approved, redirects, config);
   const target = config.publisher.releaseStagingDir;
   await mkdir(dirname(target), { recursive: true });
   const temporary = await mkdtemp(join(dirname(target), ".release-staging-"));
@@ -147,6 +156,15 @@ export const buildReleaseStaging = async (
       schemaVersion: 1,
       pages: ordered.map((revision) => revision.metadata),
     };
+    const rendererInput = await createRendererInput({
+      root: temporary,
+      siteUrl: config.site.url,
+      approved: ordered,
+      redirects,
+      profile: resolveRendererProfile(config),
+      privateRoot: config.vault.root,
+      denyPatterns: config.security.denyPatterns,
+    });
     await Promise.all([
       materializeAssets(temporary, ordered),
       materializeContent(temporary, ordered),
@@ -171,6 +189,7 @@ export const buildReleaseStaging = async (
         join(temporary, "search-index.json"),
         `${JSON.stringify({ schemaVersion: 1, pages: searchIndex })}\n`,
       ),
+      atomicWrite(join(temporary, "renderer-input.json"), `${JSON.stringify(rendererInput)}\n`),
     ]);
     await replaceDirectory(temporary, target);
     await writeReleaseIdentity(config.publisher.stateDir, {

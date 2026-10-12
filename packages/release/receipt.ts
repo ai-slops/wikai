@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { atomicWrite, hash } from "../fs/index.ts";
+import { atomicWrite, hash, isFsError } from "../fs/index.ts";
 import type { PublicRedirect } from "../model/index.ts";
 import { PublisherError } from "../model/index.ts";
 
@@ -15,7 +15,12 @@ const ReleaseIdentitySchema = z.strictObject({
 export const ReleaseReceiptSchema = ReleaseIdentitySchema.extend({
   distFingerprintHash: HashSchema,
 });
-const POLICY_FILES = ["content-index.json", "publication-manifest.json", "redirects.json"] as const;
+const POLICY_FILES = [
+  "content-index.json",
+  "publication-manifest.json",
+  "redirects.json",
+  "renderer-input.json",
+] as const;
 
 export type ReleaseIdentity = Readonly<z.infer<typeof ReleaseIdentitySchema>>;
 export type ReleaseReceipt = Readonly<z.infer<typeof ReleaseReceiptSchema>>;
@@ -50,16 +55,16 @@ export function directoryFingerprintHash(fingerprint: readonly object[]): string
 }
 
 export async function releasePolicyHash(root: string): Promise<string> {
-  return hash(
-    JSON.stringify(
-      await Promise.all(
-        POLICY_FILES.map(async (name) => ({
-          name,
-          digest: hash(await readFile(join(root, name))),
-        })),
-      ),
-    ),
-  );
+  const files = [];
+  for (const name of POLICY_FILES) {
+    try {
+      files.push({ name, digest: hash(await readFile(join(root, name))) });
+    } catch (error) {
+      if (name === "renderer-input.json" && isFsError(error, "ENOENT")) continue;
+      throw error;
+    }
+  }
+  return hash(JSON.stringify(files));
 }
 
 export async function writeReleaseIdentity(
