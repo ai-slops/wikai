@@ -7,6 +7,7 @@ import { buildReleaseStaging, buildSite } from "../release/index.ts";
 import { PublisherState } from "../state/index.ts";
 import { assertExplicitSlug, captureApproval } from "./approval.ts";
 import { inspectAsset } from "./assets.ts";
+import { applyComponentUpdateApproval, planComponentUpdateApproval } from "./component-approval.ts";
 import { hasSourceDrift } from "./drift.ts";
 import { createExtraction, createProject } from "./projection.ts";
 import { createPublisherPlan, type PublisherPlan } from "./publisher-plan.ts";
@@ -27,6 +28,8 @@ import { markCandidate, patchMetadata } from "./source.ts";
 import { applySourceUpdate, planSourceUpdate } from "./source-update.ts";
 import type { SourceUpdateApply, SourceUpdateInput } from "./source-update-schema.ts";
 import { createStatus } from "./status.ts";
+import type { TagFilterInput, TagRenameApply, TagRenameInput } from "./tag-schema.ts";
+import { applyTagRename, filterByTags, planTagRename, tagList, tagTree } from "./tags.ts";
 
 export type { PublisherPlan } from "./publisher-plan.ts";
 
@@ -126,6 +129,16 @@ export class Publisher {
     });
   }
 
+  async planComponentUpdateApproval(): ReturnType<typeof planComponentUpdateApproval> {
+    return planComponentUpdateApproval(this.config, this.state);
+  }
+
+  async applyComponentUpdateApproval(
+    expectedPlanHash: string,
+  ): ReturnType<typeof applyComponentUpdateApproval> {
+    return applyComponentUpdateApproval(this.config, this.state, expectedPlanHash);
+  }
+
   async withdraw(publicId: string, expectedHash: string, redirect?: string): Promise<void> {
     await this.state.withdraw(publicId, expectedHash, redirect);
   }
@@ -140,6 +153,26 @@ export class Publisher {
 
   async extract(input: ExtractInput): ReturnType<typeof createExtraction> {
     return createExtraction(this.config, ExtractInputSchema.parse(input));
+  }
+
+  async tagList(): ReturnType<typeof tagList> {
+    return tagList(this.config);
+  }
+
+  async tagTree(): ReturnType<typeof tagTree> {
+    return tagTree(this.config);
+  }
+
+  async filterByTags(input: TagFilterInput): ReturnType<typeof filterByTags> {
+    return filterByTags(this.config, input);
+  }
+
+  async planTagRename(input: TagRenameInput): ReturnType<typeof planTagRename> {
+    return planTagRename(this.config, input);
+  }
+
+  async applyTagRename(input: TagRenameApply): ReturnType<typeof applyTagRename> {
+    return applyTagRename(this.config, input);
   }
 
   async updateMetadata(
@@ -226,23 +259,11 @@ export class Publisher {
   }
 }
 
+export { applyComponentUpdateApproval, planComponentUpdateApproval } from "./component-approval.ts";
 export type {
-  CandidateInput,
-  ExtractInput,
-  MetadataPatch,
-  ProjectInput,
-  PublicationDetail,
-  PublisherStatus,
-  StatusRow,
-} from "./schema.ts";
-export {
-  CandidateInputSchema,
-  DetailSchema,
-  ExtractInputSchema,
-  LineSelectionSchema,
-  MetadataPatchSchema,
-  ProjectInputSchema,
-  PublicationStatusSchema,
-  StatusRowSchema,
-  StatusSchema,
-} from "./schema.ts";
+  ComponentUpdateApprovalItem,
+  ComponentUpdateApprovalPlan,
+  ComponentUpdateSkipReason,
+} from "./component-plan.ts";
+export * from "./schema.ts";
+export * from "./tag-schema.ts";

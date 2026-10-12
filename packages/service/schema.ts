@@ -10,6 +10,7 @@ import {
   WorkingSchema,
   WorkSchema,
 } from "../model/index.ts";
+import { TagListSchema } from "../model/tag.ts";
 
 export const CandidateInputSchema = z.object({
   path: z.string().min(1),
@@ -48,7 +49,7 @@ export const MetadataPatchSchema = z
     title: z.string().min(1).optional(),
     slug: z.string().min(1).optional(),
     summary: z.string().optional(),
-    tags: z.array(z.string()).optional(),
+    tags: TagListSchema.optional(),
     aliases: z.array(z.string()).optional(),
     listed: z.boolean().optional(),
     index: z.boolean().optional(),

@@ -1,4 +1,5 @@
 import type { ApprovedRevision, PublicRedirect, WorkingPublication } from "../model/index.ts";
+import { approveComponentUpdateBatch, type ComponentBatchResult } from "./component-approval.ts";
 import { readStateDocument } from "./document.ts";
 import {
   type ApprovalCapture,
@@ -33,6 +34,17 @@ export class PublisherState {
       working,
       expectedHash,
       ...(capture === undefined ? {} : { capture }),
+    });
+  }
+
+  async approveComponentUpdates(
+    expectedPlanHash: string,
+    capture: Parameters<typeof approveComponentUpdateBatch>[0]["capture"],
+  ): Promise<ComponentBatchResult> {
+    return approveComponentUpdateBatch({
+      stateDir: this.stateDir,
+      expectedPlanHash,
+      capture,
     });
   }
 
