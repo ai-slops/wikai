@@ -9,6 +9,7 @@ const AbsolutePathSchema = z.string().superRefine((path, context) => {
 });
 const LinkSchema = z.object({ publicId: z.string(), slug: z.string(), title: z.string(), anchor: z.string().optional() }).strict();
 const AssetSchema = z.object({ publicPath: z.string(), hash: z.string(), mime: z.string(), bytes: z.number(), reviewed: z.boolean() }).strict();
+const RendererAssetSchema = AssetSchema.omit({ reviewed: true });
 const MetadataSchema = z.object({
   id: z.string().regex(/^pub_[A-Za-z0-9_-]+$/),
   kind: KindSchema,
@@ -36,18 +37,78 @@ const PageSchema = z.object({ metadata: MetadataSchema, markdown: z.string(), ht
 const ContentIndexSchema = z.object({ schemaVersion: z.literal(1), pages: z.array(PageSchema) }).strict();
 const RedirectSchema = z.object({ from: AbsolutePathSchema, to: AbsolutePathSchema, status: z.literal(301) }).strict();
 const RedirectIndexSchema = z.object({ schemaVersion: z.literal(1), redirects: z.array(RedirectSchema) }).strict();
+const FileDescriptorSchema = z.object({ artifactPath: z.string(), hash: z.string(), mime: z.string(), bytes: z.number() }).strict();
+const PublicFileDescriptorSchema = FileDescriptorSchema.extend({ publicPath: AbsolutePathSchema });
+const RendererPageSchema = z.object({
+  metadata: MetadataSchema,
+  content: z.discriminatedUnion("type", [
+    z.object({ type: z.literal("markdown"), markdown: z.string(), html: z.string() }).strict(),
+    z.object({
+      type: z.literal("mdx"),
+      runtime: z.literal("react-19"),
+      markdown: z.string(),
+      fallbackHtml: z.string(),
+      html: FileDescriptorSchema,
+      scripts: z.array(PublicFileDescriptorSchema).min(1),
+      styles: z.array(PublicFileDescriptorSchema),
+    }).strict(),
+  ]),
+  outgoingLinks: z.array(LinkSchema),
+  backlinks: z.array(LinkSchema),
+  assets: z.array(RendererAssetSchema),
+}).strict();
+const RendererInputSchema = z.object({
+  protocol: z.literal("wikai-static-renderer"),
+  version: z.literal(1),
+  siteUrl: z.url(),
+  pages: z.array(RendererPageSchema),
+  redirects: z.array(RedirectSchema),
+  assets: z.array(RendererAssetSchema),
+  tagTree: z.array(z.unknown()),
+}).strict();
 
-export type PublicPage = z.infer<typeof PageSchema>;
+export type PublicPage = z.infer<typeof PageSchema> & Readonly<{
+  runtime?: Readonly<{ type: "react-19"; scripts: readonly string[]; styles: readonly string[] }>;
+}>;
 export type PublicKind = z.infer<typeof KindSchema>;
 export type PublicRedirect = z.infer<typeof RedirectSchema>;
 export type PublicContent = Readonly<{ schemaVersion: 1; pages: readonly PublicPage[]; redirects: readonly PublicRedirect[] }>;
 export type FeedKind = "all" | "work" | "knowledge" | "log";
 export type TocItem = Readonly<{ depth: number; id: string; text: string }>;
-export type ArticlePresentation = Readonly<{ html: string; headingId?: string; toc: readonly TocItem[] }>;
+export type ArticlePresentation = Readonly<{
+  html: string;
+  headingId?: string;
+  embeddedHeading: boolean;
+  toc: readonly TocItem[];
+}>;
 
 const stagingRoot = (): string => process.env.WIKAI_STAGING_DIR ?? "./staging";
 
 export const loadContent = async (root = stagingRoot()): Promise<PublicContent> => {
+  try {
+    const input = RendererInputSchema.parse(JSON.parse(await readFile(join(root, "renderer-input.json"), "utf8")));
+    return {
+      schemaVersion: 1,
+      pages: input.pages.map((page) => ({
+        metadata: page.metadata,
+        markdown: page.content.markdown,
+        html: page.content.type === "mdx" ? page.content.fallbackHtml : page.content.html,
+        outgoingLinks: page.outgoingLinks,
+        backlinks: page.backlinks,
+        assets: page.assets.map((asset) => ({ ...asset, reviewed: true })),
+        ...(page.content.type === "mdx" ? {
+          runtime: {
+            type: "react-19" as const,
+            scripts: page.content.scripts.map(({ publicPath }) => publicPath),
+            styles: page.content.styles.map(({ publicPath }) => publicPath),
+          },
+        } : {}),
+      })),
+      redirects: input.redirects,
+    };
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+  }
   const [contentText, redirectText] = await Promise.all([
     readFile(join(root, "content-index.json"), "utf8"),
     readFile(join(root, "redirects.json"), "utf8"),
@@ -83,11 +144,13 @@ const headingText = (html: string): string => html
 
 export const articlePresentation = (title: string, html: string): ArticlePresentation => {
   const leadingH1 = /^\s*<h1 id="([A-Za-z0-9][A-Za-z0-9._:-]*)">([\s\S]*?)<\/h1>\s*/u.exec(html);
-  const leadingMarkup = leadingH1?.[0];
-  const leadingId = leadingH1?.[1];
-  const leadingText = leadingH1?.[2];
-  const matchesTitle = leadingMarkup !== undefined && leadingId !== undefined && leadingText !== undefined && headingText(leadingText) === title.trim();
-  const presentedHtml = matchesTitle ? html.slice(leadingMarkup.length) : html;
+  const embeddedH1 = /^\s*<div id="wikai-mdx-root">\s*<h1(?: id="([A-Za-z0-9][A-Za-z0-9._:-]*)")?>([\s\S]*?)<\/h1>/u.exec(html);
+  const heading = leadingH1 ?? embeddedH1;
+  const leadingMarkup = heading?.[0];
+  const leadingId = heading?.[1];
+  const leadingText = heading?.[2];
+  const matchesTitle = leadingMarkup !== undefined && leadingText !== undefined && headingText(leadingText) === title.trim();
+  const presentedHtml = matchesTitle && leadingH1 !== null ? html.slice(leadingMarkup.length) : html;
   const seen = new Set<string>();
   const toc = [...presentedHtml.matchAll(/<h([2-6]) id="([^"]+)">([\s\S]*?)<\/h\1>/gu)].flatMap((match) => {
     const depth = match[1];
@@ -100,7 +163,8 @@ export const articlePresentation = (title: string, html: string): ArticlePresent
   });
   return {
     html: presentedHtml,
-    ...(matchesTitle ? { headingId: leadingId } : {}),
+    ...(matchesTitle && leadingId !== undefined ? { headingId: leadingId } : {}),
+    embeddedHeading: matchesTitle && embeddedH1 !== null,
     toc,
   };
 };

@@ -6,14 +6,17 @@ type Props = {
   readonly description: string;
   readonly canonical?: URL;
   readonly noindex?: boolean;
+  readonly scripts?: readonly string[];
+  readonly styles?: readonly string[];
 };
 
-const { title, description, canonical = Astro.url, noindex = false } = Astro.props;
+const { title, description, canonical = Astro.url, noindex = false, scripts = [], styles = [] } = Astro.props;
 const current = Astro.url.pathname;
 const nav = [
   ["Work", "/work/"],
   ["Knowledge", "/knowledge/"],
   ["Log", "/log/"],
+  ["Categories", "/categories/"],
   ["About", "/about/"],
   ["Now", "/now/"],
   ["Search", "/search/"],
@@ -25,13 +28,16 @@ const nav = [
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="description" content={description} />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'" />
     <meta name="robots" content={noindex ? "noindex,follow" : "index,follow"} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
     <link rel="canonical" href={canonical} />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23246454' d='M2 2h2l1 8 3-6 3 6 1-8h2l-2 12h-2L8 8l-2 6H4z'/%3E%3C/svg%3E" />
     <link rel="alternate" type="application/atom+xml" title="Wikai feed" href="/feeds/all.xml" />
+    {styles.map((href) => <link rel="stylesheet" href={href} />)}
     <title>{title}</title>
   </head>
   <body>
@@ -47,5 +53,6 @@ const nav = [
       <span>Selected work, knowledge, and field notes.</span>
       <a href="/contact/">Contact</a>
     </footer>
+    {scripts.map((src) => <script type="module" src={src} is:inline></script>)}
   </body>
 </html>

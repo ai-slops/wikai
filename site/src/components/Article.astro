@@ -17,13 +17,13 @@ const backlinkPath = (publicId: string): string => {
   return source === undefined ? "/search/" : publicPathFor(source);
 };
 ---
-<BaseLayout title={`${page.metadata.title} — Wikai`} description={description} canonical={canonical} noindex={!page.metadata.index}>
+<BaseLayout title={`${page.metadata.title} — Wikai`} description={description} canonical={canonical} noindex={!page.metadata.index} {...(page.runtime === undefined ? {} : { scripts: page.runtime.scripts, styles: page.runtime.styles })}>
   <article>
     <PageHeader eyebrow={page.metadata.kind} title={page.metadata.title} {...(page.metadata.summary === undefined ? {} : { summary: page.metadata.summary })} {...(presentation.headingId === undefined ? {} : { headingId: presentation.headingId })} />
     <ArticleMeta page={page} />
     <TagList tags={page.metadata.tags} />
     {page.metadata.kind === "knowledge" && <TableOfContents items={presentation.toc} />}
-    <div class="prose" set:html={presentation.html} />
+    <div class:list={["prose", { "prose-runtime-heading": presentation.embeddedHeading }]} set:html={presentation.html} />
     {page.backlinks.length > 0 && (
       <aside class="backlinks" aria-labelledby="backlinks-title">
         <h2 id="backlinks-title">Referenced by</h2>

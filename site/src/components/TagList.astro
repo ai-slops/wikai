@@ -1,5 +1,8 @@
 ---
+import { displayTags } from "../lib/astro-profile.ts";
+
 type Props = { readonly tags: readonly string[] };
 const { tags } = Astro.props;
+const displayed = displayTags(tags);
 ---
-{tags.length > 0 && <ul class="tags" aria-label="Tags">{tags.map((tag) => <li class="tag">{tag}</li>)}</ul>}
+{displayed.length > 0 && <ul class="tags" aria-label="Tags">{displayed.map((tag) => <li class="tag">{tag.href === undefined ? tag.label : <a href={tag.href}>{tag.label}</a>}</li>)}</ul>}

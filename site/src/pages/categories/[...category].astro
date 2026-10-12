@@ -1,0 +1,31 @@
+---
+import BaseLayout from "../../components/BaseLayout.astro";
+import EntryList from "../../components/EntryList.astro";
+import PageHeader from "../../components/PageHeader.astro";
+import { categoryViews } from "../../lib/astro-profile.ts";
+import { loadContent } from "../../lib/content.ts";
+
+export const getStaticPaths = async () => {
+  const { pages } = await loadContent();
+  return categoryViews(pages).map((view) => ({
+    params: { category: view.path === "" ? undefined : view.path },
+    props: { view },
+  }));
+};
+
+const { view } = Astro.props;
+const title = view.path === "" ? "Categories" : view.label;
+const summary = view.path === ""
+  ? "Browse public entries through their editorial category hierarchy."
+  : `Public entries in ${view.label}.`;
+---
+<BaseLayout title={`${title} — Wikai`} description={summary}>
+  <PageHeader eyebrow={`${view.pages.length} public entries`} title={title} summary={summary} />
+  {view.children.length > 0 && (
+    <nav class="category-branches" aria-label="Subcategories">
+      <p class="eyebrow">Explore deeper</p>
+      <ul>{view.children.map((child) => <li><a href={child.route}>{child.label}</a></li>)}</ul>
+    </nav>
+  )}
+  <EntryList pages={view.pages} empty="No listed entries are public in this category." />
+</BaseLayout>

@@ -10,7 +10,7 @@ const recent = pages.filter((page) => page.metadata.listed && page.metadata.kind
 const description = home?.metadata.summary ?? "Selected work, durable knowledge, and field notes.";
 const homePresentation = home === undefined ? undefined : articlePresentation(home.metadata.title, home.html);
 ---
-<BaseLayout title="Wikai — Work and knowledge" description={description} noindex={home !== undefined && !home.metadata.index}>
+<BaseLayout title="Wikai — Work and knowledge" description={description} noindex={home !== undefined && !home.metadata.index} {...(home?.runtime === undefined ? {} : { scripts: home.runtime.scripts, styles: home.runtime.styles })}>
   <section class="hero">
     <div>
       <p class="eyebrow">Independent practice / public notebook</p>

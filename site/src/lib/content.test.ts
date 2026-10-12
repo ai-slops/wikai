@@ -30,6 +30,26 @@ const metadata = ({ id, kind, slug, index, feed }: MetadataFixture) => ({
   ...(kind === "log" ? { log: { occurredAt: "2026-09-19" } } : {}),
 });
 
+const rendererPage = (metadataValue: ReturnType<typeof metadata>, content: object) => ({
+  metadata: metadataValue,
+  content,
+  outgoingLinks: [],
+  backlinks: [],
+  assets: [],
+});
+
+const writeRendererInput = async (pages: readonly object[]): Promise<void> => {
+  await writeFile(join(root, "renderer-input.json"), JSON.stringify({
+    protocol: "wikai-static-renderer",
+    version: 1,
+    siteUrl: "https://example.test",
+    pages,
+    redirects: [],
+    assets: [],
+    tagTree: [],
+  }));
+};
+
 describe("public content contract", () => {
   it("parses approved pages and maps each kind to its public route", async () => {
     // Given a valid staging index, when loaded, then routes are derived only from safe public metadata.
@@ -39,6 +59,36 @@ describe("public content contract", () => {
     ] }));
     const content = await loadContent(root);
     expect(content.pages.map(publicPathFor)).toEqual(["/work/signal", "/about"]);
+  });
+
+  it("preserves MDX fallback markup and executable resource descriptors", async () => {
+    // Given strict renderer input for a React 19 MDX page.
+    const scriptHash = `sha256:${"a".repeat(64)}`;
+    await writeRendererInput([
+      rendererPage(
+        metadata({ id: "pub_counter", kind: "knowledge", slug: "/knowledge/counter", index: true, feed: false }),
+        {
+          type: "mdx",
+          runtime: "react-19",
+          markdown: "# Counter",
+          fallbackHtml: '<div id="wikai-mdx-root"><button>0</button></div>',
+          html: { artifactPath: "renderer-artifacts/mdx/counter.html", hash: scriptHash, mime: "text/html", bytes: 54 },
+          scripts: [{ artifactPath: "renderer-artifacts/mdx/counter.js", publicPath: `/_assets/mdx/${"a".repeat(64)}.js`, hash: scriptHash, mime: "text/javascript", bytes: 1 }],
+          styles: [{ artifactPath: "renderer-artifacts/mdx/counter.css", publicPath: `/_assets/mdx/${"a".repeat(64)}.css`, hash: scriptHash, mime: "text/css", bytes: 1 }],
+        },
+      ),
+    ]);
+
+    // When the public site loads protocol input.
+    const content = await loadContent(root);
+
+    // Then it retains the mount root and approved self-hosted resources instead of flattening MDX.
+    expect(content.pages[0]?.html).toContain('id="wikai-mdx-root"');
+    expect(content.pages[0]?.runtime).toEqual({
+      type: "react-19",
+      scripts: [`/_assets/mdx/${"a".repeat(64)}.js`],
+      styles: [`/_assets/mdx/${"a".repeat(64)}.css`],
+    });
   });
 
   it("applies independent search, feed, and sitemap publication policies", async () => {
@@ -67,6 +117,15 @@ describe("public content contract", () => {
     expect(presentation.headingId).toBe("a-deliberate-boundary");
     expect(presentation.html).toBe('<h2 id="why">Why</h2><p>Body</p>');
     expect(presentation.toc).toEqual([{ depth: 2, id: "why", text: "Why" }]);
+  });
+
+  it("marks a matching MDX root H1 for presentation without changing its hydration root", () => {
+    // Given hydrated MDX fallback HTML, when presented, then the duplicate heading is marked while the runtime root remains byte-identical.
+    const html = '<div id="wikai-mdx-root"><h1>Interactive proof</h1><p>Body</p></div>';
+    const presentation = articlePresentation("Interactive proof", html);
+    expect(presentation.embeddedHeading).toBe(true);
+    expect(presentation.headingId).toBeUndefined();
+    expect(presentation.html).toBe(html);
   });
 
   it("keeps a distinct leading H1 and excludes unsafe or duplicate TOC anchors", () => {

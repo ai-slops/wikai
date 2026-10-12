@@ -79,6 +79,13 @@ The base unit is 4px. Tokens: `--space-1` 4px, `--space-2` 8px, `--space-3` 12px
 - **States**: static unless rendered as filter; interactive marks use the link state system.
 - **Accessibility**: never conveys meaning by color alone.
 
+### Category branch navigation
+- **Structure**: an indexed page heading, immediate child-category links, then shared entry rows for all descendants.
+- **Variants**: category root and nested category; the internal `category` tag root is never shown as a label.
+- **Spacing**: `--space-2`, `--space-4`, `--space-6`, and `--space-12` only.
+- **States**: branch and category-tag links use the shared link hover and focus states.
+- **Accessibility**: native navigation/list semantics and an explicit subcategory label.
+
 ### Search controls and result
 - **Structure**: labelled query input, kind checkboxes, result status, entry rows.
 - **States**: empty query, no results, results, focus, checked, disabled.
