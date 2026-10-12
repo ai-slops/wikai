@@ -48,7 +48,7 @@
   }
 }
 
-@media (max-width: 47.99rem) {
+@media (max-width: 48rem) {
   .app-shell {
     block-size: auto;
     min-block-size: 100dvh;
@@ -61,13 +61,17 @@
     position: sticky;
     z-index: 5;
   }
-  .identity span {
+  .identity {
     display: none;
   }
   .masthead-actions .button--quiet {
     display: none;
   }
   #inspect-button {
+    display: none;
+  }
+  #tags-button,
+  #components-button {
     display: inline-flex;
   }
   .masthead-actions .button {
@@ -114,6 +118,23 @@
     margin-block-end: var(--space-4);
     padding: var(--space-4);
   }
+  .review-section .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .review-section > ol {
+    display: grid;
+    gap: var(--space-3);
+    padding-inline-start: var(--space-5);
+  }
+  .review-section > ol li {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .review-section > ol .restore-button {
+    justify-self: start;
+  }
   .preview-frame {
     min-block-size: 24rem;
   }
@@ -127,11 +148,20 @@
     gap: var(--space-3);
     padding: var(--space-4);
   }
+  .management-dialog form > header {
+    inset-block-start: calc(-1 * var(--space-4));
+    margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) 0;
+    padding: var(--space-4) var(--space-4) var(--space-3);
+  }
   dialog textarea {
     max-block-size: 5rem;
   }
   dialog .form-note {
     margin: 0;
+  }
+  .toast {
+    inset: auto var(--space-4) var(--space-4);
+    max-inline-size: none;
   }
 }
 

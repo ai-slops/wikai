@@ -5,6 +5,7 @@ import {
   ApproveSchema,
   AssetInspectionQuerySchema,
   CandidateSchema,
+  ComponentApprovalApplySchema,
   ExtractSchema,
   MetadataUpdateSchema,
   ModeSchema,
@@ -12,6 +13,9 @@ import {
   PublicIdSchema,
   RestoreSchema,
   SourceUpdateQuerySchema,
+  TagFilterQuerySchema,
+  TagRenameApplyRequestSchema,
+  TagRenamePlanSchema,
   WithdrawSchema,
 } from "./api-schemas.ts";
 import { previewHtml } from "./preview.ts";
@@ -48,6 +52,15 @@ export function registerApiRoutes(app: Hono, publisher: PublisherPort, csrfToken
     return context.json({ diagnostics: status.diagnostics });
   });
   app.get("/api/v1/plan", async (context) => context.json(await publisher.plan()));
+  app.get("/api/v1/tags", async (context) => context.json(await publisher.tagList()));
+  app.get("/api/v1/tags/tree", async (context) => context.json(await publisher.tagTree()));
+  app.get("/api/v1/tags/filter", async (context) => {
+    const input = TagFilterQuerySchema.parse(context.req.query());
+    return context.json(await publisher.filterByTags(input));
+  });
+  app.get("/api/v1/components/plan", async (context) =>
+    context.json(await publisher.planComponentUpdateApproval()),
+  );
   app.get("/api/v1/assets/inspect", async (context) => {
     const query = AssetInspectionQuerySchema.parse(context.req.query());
     return context.json(await publisher.inspectAsset(query.path));
@@ -134,6 +147,18 @@ export function registerApiRoutes(app: Hono, publisher: PublisherPort, csrfToken
     return context.json(await publisher.extract(input));
   });
   app.post("/api/v1/build", async (context) => context.json(await publisher.build()));
+  app.post("/api/v1/tags/rename/plan", async (context) => {
+    const input = TagRenamePlanSchema.parse(await jsonBody(context.req.raw));
+    return context.json(await publisher.planTagRename(input));
+  });
+  app.post("/api/v1/tags/rename/apply", async (context) => {
+    const input = TagRenameApplyRequestSchema.parse(await jsonBody(context.req.raw));
+    return context.json(await publisher.applyTagRename(input));
+  });
+  app.post("/api/v1/components/approve", async (context) => {
+    const input = ComponentApprovalApplySchema.parse(await jsonBody(context.req.raw));
+    return context.json(await publisher.applyComponentUpdateApproval(input.expectedPlanHash));
+  });
   app.post("/api/v1/publications/:publicId/restore", async (context) => {
     const publicId = PublicIdSchema.parse(context.req.param("publicId"));
     const input = RestoreSchema.parse(await jsonBody(context.req.raw));

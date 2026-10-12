@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/review.css">
     <link rel="stylesheet" href="/diff.css">
     <link rel="stylesheet" href="/review-tools.css">
+    <link rel="stylesheet" href="/management.css">
     <link rel="stylesheet" href="/responsive.css">
   </head>
   <body>
@@ -26,6 +27,8 @@
         <div class="masthead-actions">
           <span class="connection" id="connection"><i></i> Local</span>
           <button class="button button--quiet" id="inspect-button" type="button">Inspect</button>
+          <button class="button button--quiet" id="tags-button" type="button">Tags</button>
+          <button class="button button--quiet" id="components-button" type="button">Updates</button>
           <button class="button button--quiet" id="new-button" type="button">New candidate</button>
           <button class="button button--ink" id="build-button" type="button">Build release</button>
         </div>
@@ -102,6 +105,37 @@
         <div class="tool-state" id="inspection-state" role="status" aria-live="polite">Enter a PDF or archive path inside the vault.</div>
         <section id="inspection-report" hidden aria-label="Attachment inspection report"></section>
         <footer><button class="button button--quiet" id="inspection-cancel" type="button">Close</button><button class="button button--ink" id="inspection-submit" type="submit">Inspect metadata</button></footer>
+      </form>
+    </dialog>
+    <dialog id="tags-dialog" class="management-dialog" aria-labelledby="tags-title">
+      <form id="tags-form">
+        <header><div><span class="kicker">Public taxonomy</span><h2 id="tags-title">Manage tags</h2></div><button class="icon-button" data-close-dialog="tags-dialog" aria-label="Close dialog" type="button">×</button></header>
+        <p class="form-note">Tag paths are generic hierarchy. Exact matches one path; subtree includes every descendant.</p>
+        <section class="management-section" aria-labelledby="tag-filter-title">
+          <div class="section-heading"><div><span class="kicker">Tree filter</span><h3 id="tag-filter-title">Browse public tags</h3></div><button class="button button--quiet" id="tag-filter-clear" type="button">Clear filter</button></div>
+          <label class="compact-field">Match mode<select id="tag-filter-mode"><option value="exact">Exact path</option><option value="subtree">Path and subtree</option></select></label>
+          <div class="tool-state" id="tag-filter-state" role="status" aria-live="polite">Open the workbench to load tags.</div>
+          <fieldset class="tag-tree" id="tag-tree"><legend class="sr-only">Tag hierarchy</legend></fieldset>
+        </section>
+        <section class="management-section" aria-labelledby="tag-rename-title">
+          <span class="kicker">Hash-bound mutation</span><h3 id="tag-rename-title">Plan a rename</h3>
+          <div class="management-fields"><label>From path<input id="tag-rename-from" required autocomplete="off"></label><label>To path<input id="tag-rename-to" required autocomplete="off"></label><label>Match mode<select id="tag-rename-mode"><option value="exact">Exact path</option><option value="subtree">Path and subtree</option></select></label></div>
+          <button class="button button--quiet" id="tag-rename-plan" type="button">Review rename plan</button>
+          <div class="tool-state" id="tag-rename-state" role="status" aria-live="polite">No rename plan loaded.</div>
+          <div id="tag-rename-review" hidden><ul class="management-list" id="tag-rename-changes"></ul><p class="hash" id="tag-rename-hash"></p><label class="confirm-check"><input id="tag-rename-confirm" type="checkbox"> I reviewed every affected publication and this exact plan hash.</label><button class="button button--ink" id="tag-rename-apply" type="button" disabled>Apply reviewed rename</button></div>
+        </section>
+      </form>
+    </dialog>
+    <dialog id="components-dialog" class="management-dialog" aria-labelledby="components-title">
+      <form id="components-form">
+        <header><div><span class="kicker">Selective approval</span><h2 id="components-title">Component update batch</h2></div><button class="icon-button" data-close-dialog="components-dialog" aria-label="Close dialog" type="button">×</button></header>
+        <p class="form-note">Only already-approved MDX whose public change is limited to the component runtime is eligible. Mixed changes and first-time approvals stay unapproved.</p>
+        <div class="tool-state" id="components-state" role="status" aria-live="polite">Open the review to inspect a current plan.</div>
+        <section class="management-section"><span class="kicker">Eligible</span><h3><span id="components-eligible-count">0</span> component-only updates</h3><ul class="management-list" id="components-eligible"></ul></section>
+        <section class="management-section"><span class="kicker">Skipped</span><h3>Requires separate review</h3><ul class="management-list" id="components-skipped"></ul></section>
+        <p class="hash" id="components-plan-hash"></p>
+        <label class="confirm-check"><input id="components-confirm" type="checkbox"> I reviewed the eligible and skipped lists and approve only this exact plan hash.</label>
+        <footer><button class="button button--quiet" id="components-refresh" type="button">Refresh plan</button><button class="button button--ink" id="components-apply" type="button" disabled>Approve eligible updates</button></footer>
       </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

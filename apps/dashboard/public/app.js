@@ -5,7 +5,9 @@ import {
   initializeSearchShortcut,
   selectReviewTab,
 } from "/interactions.js";
+import { initializeManagement } from "/management.js";
 import { initializeMetadataEditor } from "/metadata.js";
+import { createToast } from "/notifications.js";
 import { createPreviewLoader } from "/preview-loader.js";
 import { initializeReleaseBuild } from "/release.js";
 import {
@@ -49,20 +51,11 @@ const state = {
   selectedId: "",
   detail: null,
   pendingAction: null,
+  tagFilterIds: null,
 };
-let toastTimer = 0;
 let selectionVersion = 0;
+const toast = createToast(elements.toast);
 const loadPreview = createPreviewLoader(() => state.selectedId, api.preview, toast);
-
-function toast(message, error = false) {
-  window.clearTimeout(toastTimer);
-  elements.toast.textContent = message;
-  elements.toast.classList.toggle("toast--error", error);
-  elements.toast.hidden = false;
-  toastTimer = window.setTimeout(() => {
-    elements.toast.hidden = true;
-  }, 4500);
-}
 
 function filteredPublications() {
   const query = elements.search.value.trim().toLowerCase();
@@ -71,7 +64,8 @@ function filteredPublications() {
     return (
       (!query || searchable.includes(query)) &&
       (!elements.state.value || row.status === elements.state.value) &&
-      (!elements.kind.value || row.kind === elements.kind.value)
+      (!elements.kind.value || row.kind === elements.kind.value) &&
+      (state.tagFilterIds === null || state.tagFilterIds.has(row.publicId))
     );
   });
 }
@@ -233,6 +227,15 @@ const workflowEditor = initializeWorkflow({
   notify: toast,
 });
 const assetInspection = initializeAssetInspection({ notify: toast });
+initializeManagement({
+  notify: toast,
+  onApplied: loadStatus,
+  onFilter: (documents) => {
+    state.tagFilterIds =
+      documents === null ? null : new Set(documents.map((item) => item.publicId));
+    refreshQueue();
+  },
+});
 initializeReleaseBuild({ button: elements.build, notify: toast, onBuilt: loadStatus });
 initializeSourceReview({
   selection: () => ({ id: state.selectedId, version: selectionVersion }),

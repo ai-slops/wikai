@@ -81,5 +81,50 @@ export function publisher(): PublisherPort {
       sourceHash: "sha256:merged",
     })),
     restore: vi.fn(async () => detail),
+    tagList: vi.fn(async () => [
+      { path: "topic", segment: "topic", directCount: 0, descendantCount: 1 },
+      { path: "topic/react", segment: "react", directCount: 1, descendantCount: 1 },
+    ]),
+    tagTree: vi.fn(async () => [
+      {
+        path: "topic",
+        segment: "topic",
+        directCount: 0,
+        descendantCount: 1,
+        children: [],
+      },
+    ]),
+    filterByTags: vi.fn(async () => [
+      {
+        publicId: "pub_alpha",
+        title: "Alpha",
+        sourcePath: "alpha.md",
+        sourceHash: "hash",
+        tags: ["topic/react"],
+      },
+    ]),
+    planTagRename: vi.fn(async (input) => ({
+      operation: "tag-rename",
+      ...input,
+      changes: [{ publicId: "pub_alpha", tagsBefore: ["topic/react"], tagsAfter: ["topic/ui"] }],
+      canApply: true,
+      expectedHash: `sha256:${"5".repeat(64)}`,
+    })),
+    applyTagRename: vi.fn(async (input) => ({
+      applied: true,
+      expectedHash: input.expectedHash,
+      updated: 1,
+    })),
+    planComponentUpdateApproval: vi.fn(async () => ({
+      operation: "component-update-approval",
+      eligible: [{ publicId: "pub_alpha" }],
+      skipped: [{ publicId: "pub_mixed", reasons: ["metadata-changed"] }],
+      planHash: `sha256:${"6".repeat(64)}`,
+    })),
+    applyComponentUpdateApproval: vi.fn(async (expectedPlanHash) => ({
+      applied: true,
+      planHash: expectedPlanHash,
+      approved: [{ publicId: "pub_alpha" }],
+    })),
   };
 }

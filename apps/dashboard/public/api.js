@@ -64,4 +64,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  tagList: () => request("/tags"),
+  tagTree: () => request("/tags/tree"),
+  filterByTags: (tags, mode) => {
+    const query = new URLSearchParams({ tags: tags.join(","), mode });
+    return request(`/tags/filter?${query}`);
+  },
+  planTagRename: (input) =>
+    request("/tags/rename/plan", { method: "POST", body: JSON.stringify(input) }),
+  applyTagRename: (input) =>
+    request("/tags/rename/apply", { method: "POST", body: JSON.stringify(input) }),
+  componentUpdatePlan: () => request("/components/plan"),
+  applyComponentUpdates: (expectedPlanHash) =>
+    request("/components/approve", {
+      method: "POST",
+      body: JSON.stringify({ expectedPlanHash }),
+    }),
 };

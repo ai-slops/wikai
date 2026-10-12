@@ -157,7 +157,7 @@ export function renderDetail(container, detail, row) {
     working || approved
       ? `<section class="review-section"><div class="section-heading"><div><span class="kicker">Public surface</span><h2>Preview & four-part diff</h2></div></div>
     <div class="tab-strip" role="tablist" aria-label="Review mode"><button role="tab" id="preview-tab" aria-selected="true" aria-controls="preview-panel" tabindex="0">Working preview</button><button role="tab" id="approved-tab" aria-selected="false" aria-controls="preview-panel" tabindex="-1">Approved preview</button><button role="tab" id="diff-tab" aria-selected="false" aria-controls="diff-panel" tabindex="-1">Four-part diff</button></div>
-    <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab"><iframe class="preview-frame" id="preview-frame" title="Sandboxed public working preview" sandbox></iframe></div>
+    <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab"><p class="preview-trust-warning">Public component code runs here inside an opaque, network-disabled sandbox. Review the compiled behavior before approval.</p><iframe class="preview-frame" id="preview-frame" title="Sandboxed public working preview" sandbox="allow-scripts" allow="" referrerpolicy="no-referrer"></iframe></div>
     <div id="diff-panel" role="tabpanel" aria-labelledby="diff-tab" hidden>${renderPublicationDiff(working, approved)}</div>
   </section>`
       : ""

@@ -6,11 +6,21 @@ afterEach(() => vi.unstubAllGlobals());
 it.each(["resolve", "reject"])(
   "ignores a stale Working %s after Approved is selected",
   async (outcome) => {
+    let srcdoc = "";
     const frame = {
       dataset: {},
       isConnected: true,
-      srcdoc: "",
       title: "",
+      get srcdoc() {
+        return srcdoc;
+      },
+      set srcdoc(value) {
+        srcdoc = value;
+        queueMicrotask(() => this.onload());
+      },
+      addEventListener(_event, listener) {
+        this.onload = listener;
+      },
       setAttribute() {},
       removeAttribute() {},
     };

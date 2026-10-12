@@ -401,6 +401,96 @@ describe("dashboard API", () => {
     expect(await response.json()).toEqual({ html: "<h1>Preview</h1>" });
   });
 
+  it("lists the generic tag tree and filters a subtree", async () => {
+    // Given
+    const service = publisher();
+    const app = createDashboardApp({
+      publisher: service,
+      csrfToken: "csrf-test",
+      allowedOrigin: "http://127.0.0.1:3000",
+    });
+
+    // When
+    const tree = await app.request("/api/v1/tags/tree");
+    const filtered = await app.request("/api/v1/tags/filter?tags=topic&mode=subtree");
+
+    // Then
+    expect(tree.status).toBe(200);
+    expect(await tree.json()).toMatchObject([{ path: "topic" }]);
+    expect(filtered.status).toBe(200);
+    expect(service.filterByTags).toHaveBeenCalledWith({ tags: ["topic"], mode: "subtree" });
+  });
+
+  it("plans and applies a tag rename with CSRF and the reviewed hash", async () => {
+    // Given
+    const service = publisher();
+    const app = createDashboardApp({
+      publisher: service,
+      csrfToken: "csrf-test",
+      allowedOrigin: "http://127.0.0.1:3000",
+    });
+    const headers = {
+      "content-type": "application/json",
+      origin: "http://127.0.0.1:3000",
+      "x-csrf-token": "csrf-test",
+    };
+
+    // When
+    const planned = await app.request("/api/v1/tags/rename/plan", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ from: "topic/react", to: "topic/ui", mode: "exact" }),
+    });
+    const applied = await app.request("/api/v1/tags/rename/apply", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        from: "topic/react",
+        to: "topic/ui",
+        mode: "exact",
+        expectedHash: `sha256:${"5".repeat(64)}`,
+      }),
+    });
+
+    // Then
+    expect(planned.status).toBe(200);
+    expect(applied.status).toBe(200);
+    expect(service.applyTagRename).toHaveBeenCalledWith({
+      from: "topic/react",
+      to: "topic/ui",
+      mode: "exact",
+      expectedHash: `sha256:${"5".repeat(64)}`,
+    });
+  });
+
+  it("applies only the pinned component approval plan", async () => {
+    // Given
+    const service = publisher();
+    const app = createDashboardApp({
+      publisher: service,
+      csrfToken: "csrf-test",
+      allowedOrigin: "http://127.0.0.1:3000",
+    });
+
+    // When
+    const plan = await app.request("/api/v1/components/plan");
+    const applied = await app.request("/api/v1/components/approve", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://127.0.0.1:3000",
+        "x-csrf-token": "csrf-test",
+      },
+      body: JSON.stringify({ expectedPlanHash: `sha256:${"6".repeat(64)}` }),
+    });
+
+    // Then
+    expect(plan.status).toBe(200);
+    expect(await plan.json()).toMatchObject({ eligible: [{ publicId: "pub_alpha" }] });
+    expect(applied.status).toBe(200);
+    expect(service.applyComponentUpdateApproval).toHaveBeenCalledWith(`sha256:${"6".repeat(64)}`);
+  });
+
   it("rejects a weak token before a non-loopback server can bind", () => {
     // Given
     const environment = { WIKAI_HOST: "0.0.0.0", WIKAI_TOKEN: "short" };

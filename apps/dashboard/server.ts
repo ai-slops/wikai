@@ -8,6 +8,11 @@ import { ZodError, z } from "zod";
 import { PublisherError } from "../../packages/model/index.ts";
 import type { MetadataPatch } from "../../packages/service/schema.ts";
 import type {
+  TagFilterInput,
+  TagRenameApply,
+  TagRenameInput,
+} from "../../packages/service/tag-schema.ts";
+import type {
   ApplySourceUpdateInput,
   CandidateInput,
   ExtractInput,
@@ -34,6 +39,13 @@ export interface PublisherPort {
   sourceUpdate(publicId: string, input: SourceUpdateInput): Promise<unknown>;
   applySourceUpdate(publicId: string, input: ApplySourceUpdateInput): Promise<unknown>;
   restore(publicId: string, revisionHash: string, expectedHash: string): Promise<unknown>;
+  tagList(): Promise<unknown>;
+  tagTree(): Promise<unknown>;
+  filterByTags(input: TagFilterInput): Promise<unknown>;
+  planTagRename(input: TagRenameInput): Promise<unknown>;
+  applyTagRename(input: TagRenameApply): Promise<unknown>;
+  planComponentUpdateApproval(): Promise<unknown>;
+  applyComponentUpdateApproval(expectedPlanHash: string): Promise<unknown>;
 }
 
 type DashboardOptions = {
@@ -72,6 +84,14 @@ const assets = new Map([
   ["/source-review.js", { file: "source-review.js", type: "text/javascript; charset=utf-8" }],
   ["/release.js", { file: "release.js", type: "text/javascript; charset=utf-8" }],
   ["/review-tools.css", { file: "review-tools.css", type: "text/css; charset=utf-8" }],
+  ["/management.css", { file: "management.css", type: "text/css; charset=utf-8" }],
+  ["/tags.js", { file: "tags.js", type: "text/javascript; charset=utf-8" }],
+  [
+    "/component-approval.js",
+    { file: "component-approval.js", type: "text/javascript; charset=utf-8" },
+  ],
+  ["/management.js", { file: "management.js", type: "text/javascript; charset=utf-8" }],
+  ["/notifications.js", { file: "notifications.js", type: "text/javascript; charset=utf-8" }],
 ]);
 
 export function createDashboardApp(options: DashboardOptions): Hono {

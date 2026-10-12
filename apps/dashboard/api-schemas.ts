@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { KindSchema } from "../../packages/model/index.ts";
 import { MetadataPatchSchema } from "../../packages/service/schema.ts";
+import { TagRenameApplySchema, TagRenameInputSchema } from "../../packages/service/tag-schema.ts";
 
 export const PublicIdSchema = z.string().regex(/^pub_[A-Za-z0-9_-]+$/);
 export const HashSchema = z.string().min(1).max(256);
@@ -65,6 +66,20 @@ export const ApplySourceUpdateSchema = SourceSelectorSchema.extend({
   expectedHash: z.string().regex(/^sha256:[0-9a-f]{64}$/u),
   body: z.string().max(2 * 1024 * 1024),
 });
+export const TagFilterQuerySchema = z
+  .object({
+    tags: z
+      .string()
+      .min(1)
+      .transform((value) => value.split(",").filter(Boolean)),
+    mode: z.enum(["exact", "subtree"]).default("exact"),
+  })
+  .strict();
+export const TagRenamePlanSchema = TagRenameInputSchema;
+export const TagRenameApplyRequestSchema = TagRenameApplySchema;
+export const ComponentApprovalApplySchema = z
+  .object({ expectedPlanHash: z.string().regex(/^sha256:[0-9a-f]{64}$/u) })
+  .strict();
 
 export type CandidateInput = z.infer<typeof CandidateSchema>;
 export type ProjectInput = z.infer<typeof ProjectSchema>;
