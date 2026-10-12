@@ -28,6 +28,17 @@ The public site's files are produced independently from the dashboard. Public re
 
 Review the current exposure hash and submit that hash with approval. A stale hash is rejected. The hash covers public content, public metadata, resolved links, and sanitized asset hashes. Private-only metadata and source-file moves should not require publication changes.
 
+`components plan` is a narrow convenience for already approved MDX publications whose only
+effective change is the snapshotted component/data profile. Its plan hash covers both eligible and
+skipped entries. `components approve --expected-hash ... --yes` recomputes the plan under lock and
+approves the whole eligible list; skipped publications keep their active revisions. First-time MDX
+and any authored content, metadata, tag, link, asset, drift, workflow or diagnostic change require
+the normal per-publication review path.
+
+Public hierarchical tags do not inherit private note tags. Tag rename apply is source-hash-bound,
+edits current `public.tags` only, and never rewrites approved history. Existing tag strings are not
+automatically normalized, reinterpreted or removed during upgrade.
+
 State writes are guarded by an exclusive lock and durable temporary-file replacement. A process crash may leave a lock file. Before removing a stale lock, stop all publisher processes and confirm no operation is active. Back up the state directory first. Never remove an active lock to force simultaneous mutation.
 
 File hash checks detect edits observed before replacement, but ordinary filesystem rename is not a compare-and-swap against an unrelated editor. Avoid saving the same note from another process during an approval. Directory promotion retains a `.previous` sibling for crash recovery; deploy only the exact configured dist directory, never its parent or backup siblings.
@@ -67,6 +78,30 @@ Prepare the renderer image before a release. Dependency acquisition needs networ
 
 Do not substitute an unsandboxed `astro build` for a release. Failure to prepare or launch the isolated renderer must fail the release rather than weaken isolation. Staging and dist are regenerated in temporary locations and promoted only after validation. A failed build does not replace an existing dist.
 
+## MDX code boundary
+
+MDX is disabled by default. When enabled, its compiler image must be prepared separately. The
+compiler resolves that image to an immutable ID before cache lookup, so Docker remains required
+even when a matching private artifact cache exists. Only the selected MDX source and snapshots of
+the configured public component/data roots enter the compiler container. Symlinks, unsupported
+file types, profiles over the configured byte limit, imports outside those roots and bare packages
+other than the React runtime set are rejected. Root application dependencies are not implicitly
+available to authored MDX.
+
+The compiler container is network-disabled, read-only, capability-free and resource-limited. These
+controls constrain compilation; they do not make the resulting client module inert. Approved MDX
+artifacts are real React 19 browser code. Their hashes establish the reviewed bytes, not harmless
+behavior or complete analysis of generated URLs, DOM changes or navigation.
+
+Dashboard MDX preview runs verified artifacts in an opaque `srcdoc` iframe with only
+`allow-scripts`. Its CSP denies connections, forms, frames, workers and objects, while allowing
+data-backed scripts/styles and inline style attributes. The sandbox omits same-origin permission,
+but this should not be described as a proof that script cannot navigate its own frame. On the
+published Astro site, the module runs with the public page's origin; CSP denies `connect-src` and
+non-self scripts but permits self-hosted approved modules and inline styles. Review MDX and public
+components as trusted browser code. Private component/data source is retained in private revision
+evidence and is not copied into web output; only verified compiled artifacts are released.
+
 ## Local directory deployment
 
 No deployment happens by default. A local environment must be explicitly configured as
@@ -94,5 +129,7 @@ configured environment and preserves every referenced revision. See [operations]
 - Test withdrawal and ensure the hosting provider removes stale routes and assets.
 - Configure a dedicated local directory destination, review the deployment plan, and apply its exact hash.
 
-Remote-provider credentials/adapters, cache purge, hosting health checks/atomic provider switching,
-and 410 responses are not implemented. The built-in deployment target is a local directory only.
+Remote deployment-provider credentials and adapters, cache purge, hosting health checks/atomic
+provider switching, and 410 responses are not implemented. The built-in deployment target is a
+local directory only. Custom Docker renderers are implemented separately through the versioned
+static-renderer protocol and are not deployment-provider adapters.

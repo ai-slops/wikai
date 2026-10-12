@@ -10,7 +10,7 @@ Private Markdown vault
   → explicit hash-bound approval
   → immutable private revision store
   → clean public staging
-  → isolated, network-disabled Astro build
+  → isolated, network-disabled static renderer
   → privacy audit
   → public dist
 ```
@@ -18,7 +18,8 @@ Private Markdown vault
 ## Requirements
 
 - Node.js 24 or newer and npm.
-- Docker access for isolated release builds. The dashboard, CLI, compiler and approval workflow do not require Docker.
+- Docker access for isolated release builds and for opted-in MDX compilation. Markdown-only
+  dashboard, CLI, compiler and approval workflows do not require Docker.
 - A private vault outside the public site's source directory.
 - Linux, util-linux `/usr/bin/prlimit`, and `/usr/local/bin/ffprobe` for bounded PDF,
   archive, MP3, WAV, MP4, and WebM inspection.
@@ -33,7 +34,7 @@ npm run demo
 npm start
 ```
 
-Open `http://127.0.0.1:3000`. The demo creates an ignored `.local/` vault with illustrative projects, knowledge, field notes, five approved snapshots and a deliberately blocked private-link example. It refuses to overwrite existing demo data. Nothing is deployed automatically.
+Open `http://127.0.0.1:3000`. The demo creates an ignored `.local/` vault with illustrative projects, knowledge, field notes, approved snapshots and a deliberately blocked private-link example. It refuses to overwrite existing demo data. Nothing is deployed automatically.
 
 The dashboard is a private administrative interface. It listens on loopback by default. Remote access requires explicit authenticated configuration; see [security and operations](docs/SECURITY.md). Never expose the studio as your public website.
 
@@ -98,6 +99,45 @@ Read the current command help for argument details. Source-writing commands supp
 
 `public.status: published` alone does not publish a note. Approvals freeze content, metadata, public links and attachment bytes. Later source edits appear as updates; source deletion appears as orphaned rather than withdrawn. Revision history remains private and is retained after withdrawal.
 
+## Hierarchical tags and MDX
+
+`public.tags` supports case-sensitive, slash-separated paths. Parent paths are inferred; they are
+not added to source metadata. Query or rename current public tags with exact matching by default,
+or include descendants with `--subtree`:
+
+```bash
+npm run wiki-pub -- tags list --json
+npm run wiki-pub -- tags tree --json
+npm run wiki-pub -- tags filter topic/design status/stable --json
+npm run wiki-pub -- tags rename plan topic/design topic/product-design --subtree --json
+npm run wiki-pub -- tags rename apply topic/design topic/product-design --subtree --expected-hash sha256:REPLACE_WITH_PLAN_HASH --yes
+```
+
+The core tag namespace has no reserved root. Only the Astro renderer interprets the exact
+`category/...` root as nested `/categories/...` pages. Other tags and custom renderers remain
+namespace-agnostic.
+
+MDX is disabled by default. Before enabling the existing `mdx` block in
+`publisher.config.example.yaml`, build its compiler image from the repository root:
+
+```bash
+docker build -t wikai-mdx:local -f packages/mdx/image/Dockerfile .
+```
+
+Opted-in `.mdx` can import React and files under the configured `componentRoots` and `dataRoots`.
+Arbitrary package imports are not available just because a package is a root dependency. Shared
+dependency changes can be reviewed as a strictly component-only batch:
+
+```bash
+npm run wiki-pub -- components plan --json
+npm run wiki-pub -- components approve --expected-hash sha256:REPLACE_WITH_PLAN_HASH --yes
+```
+
+The plan lists both eligible and skipped publications. A first approval, authored MDX change, or
+any metadata, tag, link, asset, source-drift, workflow or diagnostic reason is skipped and uses the
+ordinary per-publication review flow; applying the batch leaves skipped active revisions intact.
+See [MDX and hierarchical tags](docs/MDX-AND-TAGS.md) for the complete operator boundary.
+
 ## State maintenance
 
 Missing state in an initialized store now blocks normal operation rather than appearing empty.
@@ -129,9 +169,10 @@ Linux resource limits and the metadata/content that still needs manual review.
 
 ## Build the public site
 
-Prepare the pinned renderer dependencies in an image first:
+Prepare the pinned renderer image first. Prepare the MDX image too when MDX is enabled:
 
 ```bash
+docker build -t wikai-mdx:local -f packages/mdx/image/Dockerfile .
 docker build -t wikai-site:local site
 npm run wiki-pub -- build --release --yes
 npm run wiki-pub -- audit .local/public-dist --json
@@ -145,13 +186,16 @@ default and require the reviewed `planHash`, `--apply`, and confirmation. Remote
 cache purge, health-check switching, and 410 responses are not implemented. See the
 [operations runbook](docs/OPERATIONS.md).
 
-The Astro site provides Work, Knowledge, Log and fixed pages, public-only backlinks, search, per-kind feeds, sitemap and redirects. Search lists only `listed: true` pages and defaults to Work and Knowledge. Logs are `noindex` by default. Feed, listing and indexing are independent policies.
+The default Astro adapter provides Work, Knowledge, Log and fixed pages, public-only backlinks, search, per-kind feeds, sitemap and redirects. Custom prebuilt Docker adapters use the same versioned, audited release protocol. See [static renderer protocol](docs/RENDERERS.md). Search lists only `listed: true` pages and defaults to Work and Knowledge. Logs are `noindex` by default. Feed, listing and indexing are independent policies.
 
 ## Safety rules
 
 - Public metadata is reconstructed from an allowlist, including nested objects.
 - Private, unresolved, ambiguous and unapproved internal links block approval.
-- Raw HTML, MDX, note transclusion, remote images and SVG are rejected; HTML comments are removed.
+- Raw HTML in Markdown, note transclusion, remote images and SVG are rejected; HTML comments are removed.
+- MDX is disabled by default. Opted-in `.mdx` runs only in the pinned offline compiler image with
+  dependencies copied from configured `public-components` and `public-data` roots. Its approved
+  client module is trusted browser code, not sanitized prose.
 - Raster images are re-encoded without metadata; only referenced attachments are copied.
 - Source and attachment symlinks and path traversal are rejected.
 - Slugs and aliases are collision-checked and reserved across withdrawals.
@@ -185,6 +229,8 @@ Core modules live under `packages/`. CLI and dashboard share the application ser
 - [Implementation contracts](docs/IMPLEMENTATION.md)
 - [Security and operations](docs/SECURITY.md)
 - [Operations runbook](docs/OPERATIONS.md)
+- [Static renderer protocol](docs/RENDERERS.md)
+- [MDX and hierarchical tags](docs/MDX-AND-TAGS.md)
 - [Dashboard design system](DESIGN.md)
 - [Public site design system](site/DESIGN.md)
 

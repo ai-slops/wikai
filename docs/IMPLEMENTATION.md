@@ -8,9 +8,9 @@ All authored documentation is English. Preserve `.dim` byte-for-byte. Node 24 ex
 
 ## Security boundary
 
-The vault is private by default. Authoring status never constitutes approval. Only immutable approved revisions enter release staging. Source edits and deletion never change an active revision. Withdraw is explicit. Public metadata is reconstructed from an allowlist; source IDs, paths, references, private tags and aliases are never public. Reject private/unresolved/ambiguous/withdrawn links, note transclusion, MDX, raw HTML (strip comments), remote images, symlinks and traversal. Code blocks are not link syntax. Raster images are decoded/re-encoded without metadata and content-addressed. Other attachments require explicit content-hash review under public-assets; executable formats and SVG are forbidden.
+The vault is private by default. Authoring status never constitutes approval. Only immutable approved revisions enter release staging. Source edits and deletion never change an active revision. Withdraw is explicit. Public metadata is reconstructed from an allowlist; source IDs, paths, references, private tags and aliases are never public. Markdown rejects MDX syntax; opted-in `.mdx` uses the isolated MDX compiler contract below. Reject private/unresolved/ambiguous/withdrawn links, note transclusion, raw HTML (strip comments), remote images, symlinks and traversal. Code blocks are not link syntax. Raster images are decoded/re-encoded without metadata and content-addressed. Other attachments require explicit content-hash review under public-assets; executable formats and SVG are forbidden.
 
-Approval binds the exact public Markdown, metadata, links and asset hashes, not timestamps or private paths. Expected hashes prevent stale approvals. All state mutations lock, immutable revisions are verified on read, source mutations compare expected file hashes, and state writes use temp-file fsync/rename. Slugs are NFC, case-insensitive collision checked and reserved after withdrawal/move. Release regenerates clean staging, public-only backlinks/search/redirects and audits it before switching. A separate prebuilt network-disabled Docker image renders Astro without vault, home, credentials or publisher state mounts. Failed builds/audits never replace existing dist.
+Approval binds the exact public Markdown or MDX artifacts, metadata, links and asset hashes, not timestamps or private paths. Expected hashes prevent stale approvals. All state mutations lock, immutable revisions are verified on read, source mutations compare expected file hashes, and state writes use temp-file fsync/rename. Slugs are NFC, case-insensitive collision checked and reserved after withdrawal/move. Release regenerates clean staging, public-only backlinks/search/redirects and audits it before switching. The selected prebuilt renderer profile, either built-in Astro or a custom Docker adapter, runs network-disabled without vault, home, credentials or publisher state mounts. Failed builds/audits never replace existing dist.
 
 ## Module ownership and shared contracts
 
@@ -71,6 +71,59 @@ concurrency checks, recaptures resolvable heading/block baselines and preserves 
 baselines. Revision restoration preserves historical selections. These fields remain private.
 See [source tracking](SOURCE-TRACKING.md) for the complete semantics and downgrade warning.
 
+## Public tag contract
+
+Newly authored `public.tags` and metadata tag patches are canonical NFC, case-sensitive path
+strings separated by `/`. Plain one-segment tags remain valid. Empty segments, `.` and `..`
+segments, control characters and backslash separators are rejected. No core segment is reserved;
+category conventions belong to optional UI policy. Parent paths are inferred for listing and tree
+responses and are never stored in a registry or written into source metadata.
+
+`Publisher.tagList()`, `tagTree()` and `filterByTags({tags,mode})` read only explicit current
+`public.tags`; private frontmatter tags are not a fallback. Multi-tag filtering requires every
+query to match. `mode: "exact"` matches only the complete tag, while `mode: "subtree"` also matches
+descendants at a segment boundary. `planTagRename({from,to,mode})` returns a read-only plan whose
+changes include each source path and hash. `applyTagRename({...input,expectedHash})` regenerates the
+plan under the publication lock and updates only current public tag arrays through
+`MetadataPatchSchema`. It does not approve, withdraw, restore or modify active revisions, and it
+retains unrelated tags and source content.
+
+The CLI exposes `tags list`, `tags tree`, `tags filter`, and `tags rename plan/apply`; `--subtree`
+selects descendant semantics and exact matching is the default. Rename apply requires the reviewed
+plan hash and confirmation. `PersistedMetadataSchema` intentionally continues accepting historical
+tag strings without current authoring validation or normalization, so existing revision bytes and
+hashes require no migration and are never rewritten by tag management.
+
+## MDX contract
+
+MDX is disabled unless `mdx.enabled` is true. `compileMdx()` resolves the configured image to its
+immutable Docker image ID before checking the private cache, snapshots every allowed file under the
+configured component and data roots, and binds the source body/path, roots, dependency hashes,
+image reference and image ID into the snapshot identity. Docker is therefore required for image
+identity resolution even when a matching compiled artifact is cached.
+
+Dependency snapshots accept `.css`, `.js`, `.json`, `.jsx`, `.mjs`, `.ts` and `.tsx`, reject
+symlinks, and enforce `maxProfileBytes`. The runtime receives only the selected MDX source and the
+snapshotted roots. Imports may use React/React DOM/JSX runtime packages or files that resolve inside
+those roots; other bare package imports and files outside those roots fail. Root dependencies are
+not a general package allowlist. The compiler container has no network, a read-only root,
+capability and process/resource limits, and only a temporary output volume.
+
+The immutable result contains fallback HTML, a React 19 hydration module and optional stylesheet.
+Private dependency source is retained only in private snapshots/revisions; release staging exposes
+only verified artifacts and their public descriptors. Artifact hashes identify reviewed bytes but
+do not establish safe browser behavior. See [MDX and hierarchical tags](MDX-AND-TAGS.md) and the
+[renderer protocol](RENDERERS.md).
+
+`planComponentUpdateApproval()` returns eligible profile-only MDX updates, skipped publications
+with explicit reasons, and `planHash`. Eligibility requires an already approved, currently
+published MDX publication with an explicit slug, no blocking or source drift, unchanged authored
+MDX/content input, metadata, tags, body, links and assets, and a changed profile digest. Apply
+recomputes the whole plan under the publication lock and checks the reviewed hash plus active,
+source, content and profile identities. It approves the entire eligible list atomically while
+leaving skipped active revisions unchanged. First-time MDX approval remains a separate ordinary
+approval.
+
 `sourceUpdate(publicId,input)` is a read-only projection merge plan. Input identifies a tracked
 `sourceId`, an optional zero-based `referenceIndex`, and at most one replacement selector. The
 plan includes both bodies, line changes, diagnostics, `canApply`, source/projection hashes and an
@@ -108,10 +161,10 @@ See [the operational recovery contract](STATE-RECOVERY.md) for limits and review
 
 ## Interfaces and acceptance
 
-CLI commands: status, validate (`--strict`), plan, candidate, project, extract (heading/block/lines), source-update plan/apply, preview (`--working`/`--approved`), diff, approve (`--expected-hash`), withdraw (`--expected-hash`/`--redirect`), build `--release`, audit, restore, state recover/migrate/release-slug/gc, assets inspect, and deploy directory/rollback. Reading commands accept `--json`; ordinary mutations require confirmation/`--yes`. Plan/apply operations require `--apply`, the reviewed `--expected-hash`, and confirmation. Secrets and excerpts never appear in default errors. Attachment inspection and operation reports are private artifacts.
+CLI commands: status, validate (`--strict`), plan, candidate, project, extract (heading/block/lines), source-update plan/apply, tags list/tree/filter/rename plan/rename apply, components plan/approve, preview (`--working`/`--approved`), diff, approve (`--expected-hash`), withdraw (`--expected-hash`/`--redirect`), build `--release`, audit, restore, state recover/migrate/release-slug/gc, assets inspect, and deploy directory/rollback. Reading commands accept `--json`; ordinary mutations require confirmation/`--yes`. Plan/apply operations require their documented apply flag or mutation command, the reviewed `--expected-hash`, and confirmation. Secrets and excerpts never appear in default errors. Attachment inspection and operation reports are private artifacts.
 
-Dashboard: publication queue with search/state/kind filters, review page with working/approved rendered previews and four-part diff, metadata editing, source drift and history, bounded attachment inspection, manual source-update comparison/repair, assets and diagnostics, approve exact hash, withdraw confirmation, candidate/project/extract forms and build. Local API validates typed request schemas and uses a CSRF token, same-origin checks, loopback default, safe previews and no arbitrary file-read endpoint.
+Dashboard: publication queue with search/state/kind filters, review page with working/approved rendered previews and four-part diff, metadata editing, source drift and history, bounded attachment inspection, manual source-update comparison/repair, hierarchical tag query/rename tools, component-only plan/approval, assets and diagnostics, approve exact hash, withdraw confirmation, candidate/project/extract forms and build. Local API validates typed request schemas and uses a CSRF token, same-origin checks, loopback default, sandboxed previews and no arbitrary file-read endpoint.
 
-Astro: Work/Knowledge/Log/Page detail and collection routes, landing home, About/Now/Contact, search defaults to Work+Knowledge with opt-in Log, feeds all/work/knowledge/log, sitemap only index=true, noindex per document, canonical, redirects and public-only backlinks. No source maps. English accessible responsive UI.
+Astro: Work/Knowledge/Log/Page detail and collection routes, landing home, About/Now/Contact, nested category routes derived only from `category/...` tags, search defaults to Work+Knowledge with opt-in Log, feeds all/work/knowledge/log, sitemap only index=true, noindex per document, canonical, redirects, public-only backlinks and React 19 MDX hydration. No source maps. English accessible responsive UI.
 
-Tests must prove default-private, published without approval stays private, public/private link policy, exposure hash stability for private-only changes, asset mutation changes hash, stale approval failure, lock contention, source edits/deletion preserve approved release, withdrawal removes stale files, redirects/reservations, source drift, extraction excludes surrounding private text, traversal/symlink rejection, raw HTML/MDX rejection, sentinel absence, and actual isolated build cannot access private data or network.
+Tests must prove default-private, published without approval stays private, public/private link policy, exposure hash stability for private-only changes, asset mutation changes hash, stale approval failure, lock contention, source edits/deletion preserve approved release, withdrawal removes stale files, redirects/reservations, source drift, extraction excludes surrounding private text, traversal/symlink rejection, raw HTML and MDX-in-Markdown rejection, opted-in MDX isolation and artifact integrity, sentinel absence, and actual isolated builds cannot access private data or network.

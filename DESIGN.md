@@ -119,6 +119,22 @@ Review-tool measures are `--measure-dialog-wide: 54rem` for complete private rep
 - **Safety**: report values and XMP/media metadata are inserted as text only. Inspection never marks a hash reviewed and offers no approval action.
 - **Layout**: summary uses the intrinsic metadata grid; unbroken hashes and raw metadata wrap without forcing page-level horizontal scroll.
 
+### Tag workbench
+- **Structure**: native dialog with a generic nested tag tree, exact/subtree filter controls, and a separate rename plan review.
+- **States**: loading, tree ready, active filter, empty plan, reviewed plan, applying, stale plan.
+- **Safety**: rename apply is disabled until a current plan hash exists and the operator checks explicit confirmation. Category semantics are never inferred in the dashboard.
+- **Layout**: tree levels use the spacing scale and structural rules; long paths wrap without horizontal page overflow.
+
+### Component update batch
+- **Structure**: native dialog with eligible count, eligible publication list, skipped publication list with every service reason, plan hash proof, and explicit confirmation.
+- **States**: loading, no eligible updates, reviewable batch, applying, stale plan, applied.
+- **Safety**: only the reviewed `planHash` is submitted. First-time, mixed-content, blocked, and otherwise skipped publications remain untouched and visible with reasons.
+
+### Interactive preview boundary
+- **Structure**: titled iframe whose `srcdoc` contains only verified compiled artifact HTML, scripts, styles, and referenced image bytes.
+- **Safety**: sandbox permits scripts but never same-origin, forms, navigation, popups, workers, frames, or network connections. Private MDX dependency snapshots never enter the document.
+- **States**: working and approved are independently requested; stale async results cannot replace the selected document or mode. A visible warning states that approved public component code still executes inside the opaque sandbox.
+
 ### Source merge workbench
 - **Structure**: explicit indexed source-reference selector, optional replacement selector controls, current projection and selected source panes, textual selection-change report, editable merged Markdown, diagnostics, and one Apply merge action.
 - **Variants**: idle, loading, resolvable, selector-required, stale, apply-error, applied.
